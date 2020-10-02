@@ -2,7 +2,7 @@ PROJECT(CCfits)
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8.0)
 
 # Allow the developer to select if Dynamic or Static libraries are built
-OPTION (BUILD_SHARED_LIBS "Build Shared Libraries" ON)
+OPTION (BUILD_SHARED_LIBS "Build Shared Libraries" OFF)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}")
 set (LIB_DESTINATION "${CMAKE_INSTALL_PREFIX}/lib${LIB_SUFFIX}")
