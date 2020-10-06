@@ -88,7 +88,7 @@ namespace CCfits {
   FITS::FITS (const String &name, RWmode mode, bool readDataFlag, const std::vector<String>& primaryKeys)
   : m_FITSImpl(0)
   {
-     std::auto_ptr<FITSBase> apBase(new FITSBase(name,mode));
+     std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
      m_FITSImpl = apBase.get();
 
      if (mode == Read) 
@@ -144,7 +144,7 @@ namespace CCfits {
   FITS::FITS (const String &name, RWmode mode, const string &hduName, bool readDataFlag, const std::vector<String>& hduKeys, const std::vector<String>& primaryKey, int version)
   : m_FITSImpl(0)
   {
-          std::auto_ptr<FITSBase> apBase(new FITSBase(name,mode));
+          std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
           m_FITSImpl = apBase.get();
 
           int extSyntHdu = open(mode);
@@ -172,7 +172,7 @@ namespace CCfits {
   FITS::FITS (const String &name, RWmode mode, const std::vector<String>& hduNames, bool readDataFlag, const std::vector<String>& primaryKey)
   : m_FITSImpl(0)
   {
-        std::auto_ptr<FITSBase> apBase(new FITSBase(name,mode));
+        std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
         m_FITSImpl = apBase.get();
 
         int extSyntHdu = open(mode);
@@ -206,7 +206,7 @@ namespace CCfits {
   FITS::FITS (const String& fileName, const FITS& source)
     : m_FITSImpl(0)
   {
-    std::auto_ptr<FITSBase> apBase(new FITSBase(fileName,Write));
+    std::unique_ptr<FITSBase> apBase(new FITSBase(fileName,Write));
     m_FITSImpl = apBase.get();
 
     if (create() )
@@ -234,7 +234,7 @@ namespace CCfits {
   FITS::FITS (const String &name, RWmode mode, const std::vector<String>& hduNames, const std::vector<std::vector<String> >& hduKeys, bool readDataFlag, const std::vector<String>& primaryKeys, const std::vector<int>& hduVersions)
   : m_FITSImpl(0)
   {
-     std::auto_ptr<FITSBase> apBase(new FITSBase(name,mode));
+     std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
      m_FITSImpl = apBase.get();
 
      int extSyntHdu = open(mode);
@@ -270,7 +270,7 @@ namespace CCfits {
   FITS::FITS (const String& name, int bitpix, int naxis, long *naxes)
   : m_FITSImpl(0)
   {
-        std::auto_ptr<FITSBase> apBase(new FITSBase(name,Write));
+        std::unique_ptr<FITSBase> apBase(new FITSBase(name,Write));
         m_FITSImpl = apBase.get();
 
         std::vector<long>    va_naxes(naxis);
@@ -309,7 +309,7 @@ namespace CCfits {
   FITS::FITS (const string &name, RWmode mode, int hduIndex, bool readDataFlag, const std::vector<String>& hduKeys, const std::vector<String>& primaryKey)
   : m_FITSImpl(0)
   {
-        std::auto_ptr<FITSBase> apBase(new FITSBase(name,mode));
+        std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
         m_FITSImpl = apBase.get();
 
         int extSyntHdu = open(mode);
@@ -330,7 +330,7 @@ namespace CCfits {
   FITS::FITS (const String &name, RWmode mode, const std::vector<String>& searchKeys, const std::vector<String> &searchValues, bool readDataFlag, const std::vector<String>& hduKeys, const std::vector<String>& primaryKey, int version)
   : m_FITSImpl(0)
   {
-     std::auto_ptr<FITSBase> apBase(new FITSBase(name,mode));
+     std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
      m_FITSImpl = apBase.get();
 
      open(mode);
@@ -562,55 +562,55 @@ namespace CCfits {
   {
      try
      {
-        std::auto_ptr<ExtHDU> 
-	   testHDU(static_cast<ExtHDU*>(createTest.getHdu(hduIndex,false,searchKeys)));
-	std::vector<String> testKeys(searchKeys);
-	std::vector<String> testResults(searchKeys.size(),"");
-        // Missing key exceptions are caught and handled at a lower level.
-        // The result will be a smaller sized testKeys vector.
-	testHDU->readKeys(testKeys,testResults); 
-        using namespace FITSUtil;
+         std::unique_ptr<ExtHDU> 
+         testHDU(static_cast<ExtHDU*>(createTest.getHdu(hduIndex,false,searchKeys)));
+         std::vector<String> testKeys(searchKeys);
+	      std::vector<String> testResults(searchKeys.size(),"");
+         // Missing key exceptions are caught and handled at a lower level.
+         // The result will be a smaller sized testKeys vector.
+	      testHDU->readKeys(testKeys,testResults); 
+         using namespace FITSUtil;
 
-	// first: we need to have matched as many keys as were input.
+	      // first: we need to have matched as many keys as were input.
 
-	if (testKeys.size() == searchKeys.size()) 
-	{
-	   // now go through and check the values that were read
-	   // against the input value list.
-	   size_t k = 0;
-	   gotIt = true;   
-           std::vector<String>::const_iterator vi(searchValues.begin());   
-          std::vector<String>::const_iterator  viEnd(searchValues.end());   
+         if (testKeys.size() == searchKeys.size()) 
+         {
+            // now go through and check the values that were read
+            // against the input value list.
+            size_t k = 0;
+            gotIt = true;   
+               std::vector<String>::const_iterator vi(searchValues.begin());   
+               std::vector<String>::const_iterator  viEnd(searchValues.end());   
 
-           while (vi != viEnd && gotIt)
-	   {
+               while (vi != viEnd && gotIt)
+            {
 
-	      if (vi->length())
-	      {
-                   // we can at least ignore whitespace
-                   size_t first (testResults[k].find_first_not_of(" \t"));
-                   size_t last  (testResults[k].find_last_not_of(" \t"));
-		   gotIt = (lowerCase(testResults[k].substr(first,last+first+1)) == lowerCase(*vi));
-	      }
-              ++k,++vi;
-	   }
+               if (vi->length())
+               {
+                        // we can at least ignore whitespace
+                        size_t first (testResults[k].find_first_not_of(" \t"));
+                        size_t last  (testResults[k].find_last_not_of(" \t"));
+               gotIt = (lowerCase(testResults[k].substr(first,last+first+1)) == lowerCase(*vi));
+               }
+                  ++k,++vi;
+            }
 
-	   if (gotIt)
-	   {
-	      if (version == 1) break;
-	      else
-	      {
-		 int extver = 1;
-#ifdef TEMPLATE_AMBIG_DEFECT
-		 testHDU->readKeyMS("EXTVER",extver);
-#else
-		 testHDU->readKey("EXTVER",extver);                                        
-#endif
-		 if (extver == version) break;
-		 else gotIt = false;
-	      }
-	   }
-	}
+            if (gotIt)
+            {
+               if (version == 1) break;
+               else
+               {
+            int extver = 1;
+      #ifdef TEMPLATE_AMBIG_DEFECT
+            testHDU->readKeyMS("EXTVER",extver);
+      #else
+            testHDU->readKey("EXTVER",extver);                                        
+      #endif
+            if (extver == version) break;
+            else gotIt = false;
+               }
+            }
+         }
      }
 
      catch (HDU::NoSuchKeyword)
@@ -1067,7 +1067,7 @@ namespace CCfits {
     }
 
     HDU* hduCopy = source.clone(m_FITSImpl);
-    std::auto_ptr<ExtHDU> extCopy(static_cast<ExtHDU*>(hduCopy));
+    std::unique_ptr<ExtHDU> extCopy(static_cast<ExtHDU*>(hduCopy));
     const String& hduName = extCopy->name(); 
     size_t N = extension().count(hduName);
     std::pair<ExtMapIt,ExtMapIt> matches(extensionMap().equal_range(hduName));

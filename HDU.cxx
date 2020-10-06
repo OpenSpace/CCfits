@@ -546,7 +546,7 @@ namespace CCfits {
        {
           // get keywords by header position and store all the keys that
           // are neither metadata for columns nor history/comment cards.
-          std::auto_ptr<Keyword> key(KeywordCreator::getKeyword(j,this));
+          std::unique_ptr<Keyword> key(KeywordCreator::getKeyword(j,this));
           // comment/history cards have no value field and return 0 here.
           if (key.get() != 0)
           {
