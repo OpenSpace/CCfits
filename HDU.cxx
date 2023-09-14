@@ -26,8 +26,6 @@
 
 // FITS
 #include "FITS.h"
-// FITSBase
-#include "FITSBase.h"
 // HDU
 #include "HDU.h"
 
@@ -37,9 +35,9 @@
 
 namespace CCfits {
     // TYP_* are defined in fitsio.h
-    const size_t HDU::s_nCategories = 5;
-    const int HDU::s_iKeywordCategories[5] =
-          {TYP_USER_KEY,TYP_WCS_KEY,TYP_CMPRS_KEY,TYP_CKSUM_KEY,TYP_REFSYS_KEY};
+    const size_t HDU::s_nCategories = 2;
+    const int HDU::s_iKeywordCategories[s_nCategories] =
+          {TYP_USER_KEY,TYP_REFSYS_KEY};
 
   // Class CCfits::HDU::InvalidImageDataType 
 
@@ -102,7 +100,7 @@ namespace CCfits {
    copyKeys(right);
   }
 
-  HDU::HDU (FITSBase* p)
+  HDU::HDU (FITS* p)
       : m_naxis(0),
         m_bitpix(8),
         m_index(0),
@@ -121,7 +119,7 @@ namespace CCfits {
    m_index = hduIndex - 1;
   }
 
-  HDU::HDU (FITSBase* p, int bitpix, int naxis, const std::vector<long>& axes)
+  HDU::HDU (FITS* p, int bitpix, int naxis, const std::vector<long>& axes)
       : m_naxis(naxis),
         m_bitpix(bitpix),
         m_index(0),
@@ -309,13 +307,11 @@ namespace CCfits {
 
   fitsfile* HDU::fitsPointer () const
   {
-
-    return m_parent->fptr();
+    return m_parent->fitsPointer();
   }
 
-  FITSBase* HDU::parent () const
+  FITS* HDU::parent () const
   {
-
     return m_parent;
   }
 
@@ -326,7 +322,7 @@ namespace CCfits {
   // m_index contains the value of fptr->Fptr->curhdu. movabs_hdu moves to
   // 1 - this unless it's at the beginning, so it must be m_index+1 [Check!!!]
   if (fits_movabs_hdu(fitsPointer(),m_index+1, &hduType, &status) != 0) throw FitsError(status);
-  m_parent->currentExtensionName()  = "";
+  m_parent->currentExtensionName(string(""));
   }
 
   void HDU::copyKeys (const HDU& right)
@@ -406,11 +402,23 @@ namespace CCfits {
 
   void HDU::writeComment (const String& comment)
   {
-    int status(0);
+    int status=0;
+    string::size_type startPos=0, endPos=0;
+    
     makeThisCurrent();
-    if (fits_write_comment(fitsPointer(),const_cast<char*>(comment.c_str()),&status))
-                throw FitsError(status);
-
+    
+    if (comment.size())
+    {
+       while (startPos != string::npos)
+       {
+          endPos=comment.find_first_of('\n', startPos);
+          string::size_type len = (endPos == string::npos) ? string::npos : endPos-startPos;
+          string singleLine = comment.substr(startPos, len);
+          if (fits_write_comment(fitsPointer(),const_cast<char*>(singleLine.c_str()),&status))
+                      throw FitsError(status);
+          startPos = (endPos == string::npos) ? string::npos : endPos+1;
+       }
+    }
     m_comment = comment;             
   }
 
@@ -430,9 +438,22 @@ namespace CCfits {
   void HDU::writeHistory (const String& history)
   {
     int status(0);
+    string::size_type startPos=0, endPos=0;
+    
     makeThisCurrent();
-    if (fits_write_history(fitsPointer(),const_cast<char*>(history.c_str()),&status))
-                throw FitsError(status);
+    
+    if (history.size())
+    {
+       while (startPos != string::npos)
+       {
+          endPos=history.find_first_of('\n', startPos);
+          string::size_type len = (endPos == string::npos) ? string::npos : endPos-startPos;
+          string singleLine = history.substr(startPos, len);
+          if (fits_write_history(fitsPointer(),const_cast<char*>(singleLine.c_str()),&status))
+                      throw FitsError(status);
+          startPos = (endPos == string::npos) ? string::npos : endPos+1;
+       }
+    }
     m_history = history;             
   }
 
@@ -466,19 +487,19 @@ namespace CCfits {
      if (toggle)
      {
         // Ignore scale keyword values and replace with defaults.
-        fits_set_bscale(m_parent->fptr(), 1.0, 0.0, &status);
+        fits_set_bscale(m_parent->fitsPointer(), 1.0, 0.0, &status);
      }
      else
      {
        // Restore the use of the scale keyword values by re-reading 
        // the header keywords.
-        fits_set_hdustruc(m_parent->fptr(), &status);
+        fits_set_hdustruc(m_parent->fitsPointer(), &status);
      }
   }
 
   void HDU::writeChecksum ()
   {
-     fitsfile *fPtr = m_parent->fptr();
+     fitsfile *fPtr = m_parent->fitsPointer();
      makeThisCurrent();
      int status=0;
      if (fits_write_chksum(fPtr, &status))
@@ -487,7 +508,7 @@ namespace CCfits {
 
   void HDU::updateChecksum ()
   {
-     fitsfile *fPtr = m_parent->fptr();
+     fitsfile *fPtr = m_parent->fitsPointer();
      makeThisCurrent();
      int status=0;
      if (fits_update_chksum(fPtr, &status))
@@ -500,7 +521,7 @@ namespace CCfits {
      // Note that within this const function m_parent is a const
      // pointer but not a pointer-to-const, which is how we can
      // get away with this.  
-     fitsfile *fPtr = m_parent->fptr();
+     fitsfile *fPtr = m_parent->fitsPointer();
      makeThisCurrent();
      int status=0;
      if (fits_verify_chksum(fPtr, &sumsOK.first, &sumsOK.second, &status))
@@ -511,7 +532,7 @@ namespace CCfits {
   std::pair<unsigned long,unsigned long> HDU::getChecksum () const
   {
      std::pair<unsigned long,unsigned long> sums(0,0);
-     fitsfile *fPtr = m_parent->fptr();
+     fitsfile *fPtr = m_parent->fitsPointer();
      makeThisCurrent();
      int status=0;
      if (fits_get_chksum(fPtr, &sums.first, &sums.second, &status))
@@ -529,71 +550,110 @@ namespace CCfits {
     m_keyWord.erase(ki);
   }
 
-  void HDU::readAllKeys ()
+  void HDU::readAllKeys (const std::vector<int> & inKeyCategories)
   {
     makeThisCurrent();
     int status(0);
-    int n (0);
+    int numKeys (0);
     int dum(0);
-    if (fits_get_hdrpos(fitsPointer(),&n,&dum,&status)) throw FitsError(status);
+    const std::vector<int> defaultCategories{TYP_CMPRS_KEY, TYP_CKSUM_KEY,
+                TYP_WCS_KEY, TYP_REFSYS_KEY, TYP_USER_KEY};
+    if (fits_get_hdrpos(fitsPointer(),&numKeys,&dum,&status)) throw FitsError(status);
+    
+    // save the user-supplied (if it was supplied) category vector
+    const std::vector<int> & keyCategoriesToUse = 
+      (inKeyCategories.empty()) ? defaultCategories : inKeyCategories;
+    
+    // to iterate through the keyword categories later
+    std::vector<int>::const_iterator iterCategories;
 
-    for (int j = 1; j <= n; ++j)
+    // Assume the user passed in a valid key category.  If the user passed in an 
+    // int which is not a valid category, the function will simply not copy the 
+    // keywords (because the categories of the actual keywords won't match).
+    // There is currently no cfitsio function to verify that a given int is a 
+    // valid category, and the maintenance discourages a separate list of 
+    // categories here, in addition to the main list in fitsio.h
+
+    for (int iKey = 1; iKey <= numKeys; ++iKey)
     {
-       // If the reading of a particular keyword fails, most likely due
-       // to an undefined value, simply skip and continue to next
-       // keyword.
-       try
-       {
-          // get keywords by header position and store all the keys that
-          // are neither metadata for columns nor history/comment cards.
-          std::unique_ptr<Keyword> key(KeywordCreator::getKeyword(j,this));
-          // comment/history cards have no value field and return 0 here.
-          if (key.get() != 0)
+      try
+      {
+        // get keywords by header position and store all the keys that:
+        // - fit the categories that were passed in
+        //   (or are a default category if none were passed in)
+        // - are neither metadata for columns nor history/comment cards
+        std::unique_ptr<Keyword> key(KeywordCreator::getKeyword(iKey,this));
+        // comment/history cards have no value field and return 0 here.
+        if (key.get() != 0)
+        {
+          int keyClass = fits_get_keyclass(const_cast<char*>(key->name().c_str()));
+          
+          for(iterCategories  = keyCategoriesToUse.begin(); 
+              iterCategories != keyCategoriesToUse.end(); 
+              ++iterCategories) 
           {
-              int keyClass = fits_get_keyclass(const_cast<char*>(key->name().c_str()));
-              for (size_t i=0; i<s_nCategories; ++i)
-              {
-                 if (keyClass == s_iKeywordCategories[i])
-                 {
-                    saveReadKeyword(key.get());
-                    break;
-                 }
-              }
-          }       
-       }
-       catch (FitsError& )
-       {
-       }
-    }
+             if (keyClass == *iterCategories)
+             {
+                saveReadKeyword(key.get());
+                break;
+             }
+          }
+        }
+      }
+      catch (FitsError& )
+      {
+        // If the reading of a particular keyword fails, most likely due
+        // to an undefined value, simply skip and continue to next
+        // keyword.
+      }
+    } // end-for loop
 
+    // Save comment and history keywords to private data members 
     getHistory();
     getComments();
-  }
+    
+  } // end readAllKeys
 
-  void HDU::copyAllKeys (const HDU* inHdu)
+  void HDU::copyAllKeys (const HDU* inHdu, const std::vector<int> & inKeyCategories)
   {
      if (this != inHdu)
      {
         makeThisCurrent();
+        
+        // save the user-supplied (if it was supplied) category vector
+        const std::vector<int> & keyCategoriesToUse = 
+          (inKeyCategories.empty()) ? keywordCategories() : inKeyCategories;
+        
+        // to iterate through the keyword categories later
+        std::vector<int>::const_iterator iterCategories;
+
+        // iterate through the input file's stored keywords
         std::map<string,Keyword*>::const_iterator itInKeys =
                         inHdu->keyWord().begin();
         std::map<string,Keyword*>::const_iterator itInKeysEnd =
                         inHdu->keyWord().end();
         while (itInKeys != itInKeysEnd)
         {
-           // User may have read structure-related keys that normally shouldn't
-           // go into keyWord map.  Therefore check each key before copying it.
-           int keyClass = fits_get_keyclass(const_cast<char*>(itInKeys->first.c_str()));
-           for (size_t i=0; i<s_nCategories; ++i)
-           {
-              if (keyClass == s_iKeywordCategories[i])
-              {
-                 addKey(itInKeys->second);
-                 break;
-              }
-           }                      
-           ++itInKeys;            
-        }                
+          // Only copy keys that fit into the specified (or default,
+          // if none were speficied) category
+          int keyClass = fits_get_keyclass(const_cast<char*>(itInKeys->first.c_str()));
+          for(iterCategories  = keyCategoriesToUse.begin() ;
+              iterCategories != keyCategoriesToUse.end() ;
+              ++iterCategories) 
+          {
+            if (keyClass == *iterCategories)
+            {
+              addKey(itInKeys->second);
+              break;
+            } 
+          }
+          ++itInKeys;
+        }
+        
+        // write the comment and history keywords to the file
+        writeComment(getComments()); 
+        writeHistory(getHistory());
+        
      }
   }
 
@@ -641,7 +701,7 @@ namespace CCfits {
         double savZero = 0.0;
         double savScale = 1.0;
         int status = 0;
-        fitsfile* fp = m_parent->fptr();
+        fitsfile* fp = m_parent->fitsPointer();
         if (fits_read_key_dbl(fp, BZERO, &savZero, 0, &status))
         {
            isZeroKey = false;
@@ -697,9 +757,9 @@ namespace CCfits {
   }
 
   // Additional Declarations
-    Keyword& HDU::addKey(const string& name, const char* charString, const String& comment)
+    Keyword& HDU::addKey(const string& name, const char* charString, const String& comment, bool isLongStr)
     {
-        return addKey(name,String(charString),comment);      
+        return addKey(name,String(charString),comment, isLongStr); 
     }
 
     Keyword* HDU::addKey(const Keyword* inKeyword)

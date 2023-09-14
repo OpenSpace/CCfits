@@ -30,8 +30,6 @@
 #include "ExtHDU.h"
 // FitsError
 #include "FitsError.h"
-// FITSBase
-#include "FITSBase.h"
 // ImageExt
 #include "ImageExt.h"
 // HDUCreator
@@ -42,6 +40,8 @@
 #include "AsciiTable.h"
 // BinTable
 #include "BinTable.h"
+// GroupTable
+#include "GroupTable.h"
 // FITS
 #include "FITS.h"
 
@@ -53,7 +53,7 @@ namespace CCfits {
 
   // Class CCfits::HDUCreator 
 
-  HDUCreator::HDUCreator (FITSBase* p)
+  HDUCreator::HDUCreator (FITS* p)
   : m_hdu(0), m_parent(p) 
   {
   }
@@ -71,7 +71,7 @@ namespace CCfits {
 
   PHDU * HDUCreator::MakeImage (int bpix, int naxis, const std::vector<long>& naxes)
   {
-    m_hdu = m_parent->pHDU();
+    m_hdu = m_parent->m_pHDU;
     if (!m_hdu) 
     {
        switch (bpix)
@@ -127,12 +127,12 @@ namespace CCfits {
        std::istringstream extNumStr (hduName.substr(ExtHDU::missHDU().length()));
 #endif
        extNumStr >> extNum;
-       if (fits_movabs_hdu(m_parent->fptr(), extNum+1, 0, &status)) 
+       if (fits_movabs_hdu(m_parent->fitsPointer(), extNum+1, 0, &status)) 
        {
           isExtFound = false;
        }
     }
-    else if ( !primary && fits_movnam_hdu(m_parent->fptr(),ANY_HDU, 
+    else if ( !primary && fits_movnam_hdu(m_parent->fitsPointer(),ANY_HDU, 
              const_cast<char*>(hduName.c_str()),version,&status) )
     {
        isExtFound = false;
@@ -170,18 +170,18 @@ namespace CCfits {
     int status = 0;
     long imgType = 0;
     int htype = -1;
-    if ( fits_get_hdu_type(m_parent->fptr(),&htype,&status) )
+    if ( fits_get_hdu_type(m_parent->fitsPointer(),&htype,&status) )
 							throw FitsError(status);
 
     HduType xtype = HduType(htype);
 
-    m_hdu = m_parent->pHDU();
+    m_hdu = &(m_parent->pHDU());
     switch(xtype)
     {
         case ImageHdu:
         {
             int tmpBpix=0;
-            if (fits_get_img_type(m_parent->fptr(), &tmpBpix, &status))
+            if (fits_get_img_type(m_parent->fitsPointer(), &tmpBpix, &status))
                throw FitsError(status);
             imgType = static_cast<long>(tmpBpix);
             double unsignedZero(0);
@@ -381,6 +381,9 @@ namespace CCfits {
        case BinaryTbl:
           m_hdu = new BinTable(m_parent,name,rows,colName,colFmt,colUnit,version);                 
           break;
+       case GroupTbl:
+          m_hdu = new GroupTable(m_parent,version,name);
+          break;
        default:
           throw HDU::InvalidExtensionType("unexpected");
     }
@@ -393,7 +396,7 @@ namespace CCfits {
     String hduName;
     int version = 0;
     if (!primary) 
-       ExtHDU::readHduName(m_parent->fptr(),index,hduName,version );
+       ExtHDU::readHduName(m_parent->fitsPointer(),index,hduName,version );
     return commonMake(hduName,readDataFlag,keys,primary,version);
   }
 
@@ -448,13 +451,14 @@ namespace CCfits {
     float tmpScale(1.);
     float zval (.0);
     int status (0);
-    fits_read_key_flt(m_parent->fptr(),BZERO,&zval,0,&status);
+    fits_read_key_flt(m_parent->fitsPointer(),BZERO,&zval,0,&status);
     if (status)
         zval = .0;
     status = 0;
-    fits_read_key_flt(m_parent->fptr(),BSCALE,&tmpScale,0,&status);
+    fits_read_key_flt(m_parent->fitsPointer(),BSCALE,&tmpScale,0,&status);
     if (status)
        tmpScale = 1.0;
+    status = 0;
     zero = zval;
     scale = tmpScale;
     // if there is no effective scaling ... 
@@ -465,7 +469,7 @@ namespace CCfits {
     else 
     {
        int newType = 0;
-       fits_get_img_equivtype(m_parent->fptr(),&newType,&status);
+       fits_get_img_equivtype(m_parent->fitsPointer(),&newType,&status);
        if (!status)
           type = newType;          
     }                

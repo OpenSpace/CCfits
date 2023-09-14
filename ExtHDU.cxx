@@ -26,8 +26,6 @@ using std::ostrstream;
 #include "Column.h"
 // FITS
 #include "FITS.h"
-// FITSBase
-#include "FITSBase.h"
 // ExtHDU
 #include "ExtHDU.h"
 // FitsError
@@ -62,7 +60,7 @@ namespace CCfits {
   {
   }
 
-  ExtHDU::ExtHDU (FITSBase* p, HduType xtype, const String &hduName, int version)
+  ExtHDU::ExtHDU (FITS* p, HduType xtype, const String &hduName, int version)
       : HDU(p),
 	m_pcount(0),
 	m_gcount(1),
@@ -98,7 +96,7 @@ namespace CCfits {
   checkXtension();
   }
 
-  ExtHDU::ExtHDU (FITSBase* p, HduType xtype, const String &hduName, int bitpix, int naxis, const std::vector<long>& axes, int version)
+  ExtHDU::ExtHDU (FITS* p, HduType xtype, const String &hduName, int bitpix, int naxis, const std::vector<long>& axes, int version)
       : HDU(p, bitpix, naxis, axes),
    	m_pcount(0),
 	m_gcount(1),
@@ -110,7 +108,7 @@ namespace CCfits {
   // since we must know what type of object to instantiate.
   }
 
-  ExtHDU::ExtHDU (FITSBase* p, HduType xtype, int number)
+  ExtHDU::ExtHDU (FITS* p, HduType xtype, int number)
       : HDU(p), 
         m_pcount(0),
         m_gcount(1),
@@ -213,7 +211,7 @@ namespace CCfits {
   String tname("");
   int tvers = 0;
   ExtHDU::readHduName(fitsPointer(),index(),tname,tvers);
-  parent()->currentExtensionName() = tname;       
+  parent()->currentExtensionName(tname);       
   }
 
   Column& ExtHDU::column (const String& colName, bool caseSensitive) const

@@ -32,14 +32,14 @@ namespace CCfits {
   {
   }
 
-  AsciiTable::AsciiTable (FITSBase* p, const String &hduName, bool readFlag, const std::vector<String>& keys, int version)
+  AsciiTable::AsciiTable (FITS* p, const String &hduName, bool readFlag, const std::vector<String>& keys, int version)
       : Table(p, AsciiTbl,hduName,version)
   {
 
   init(readFlag,keys);
   }
 
-  AsciiTable::AsciiTable (FITSBase* p, const String &hduName, int rows, const std::vector<String>& columnName, const std::vector<String>& columnFmt, const std::vector<String>& columnUnit, int version)
+  AsciiTable::AsciiTable (FITS* p, const String &hduName, int rows, const std::vector<String>& columnName, const std::vector<String>& columnFmt, const std::vector<String>& columnUnit, int version)
       : Table(p, AsciiTbl , hduName,  rows,  columnName, columnFmt, columnUnit,  version)
   {
         long           width=0;
@@ -66,7 +66,7 @@ namespace CCfits {
         }
   }
 
-  AsciiTable::AsciiTable (FITSBase* p, int number)
+  AsciiTable::AsciiTable (FITS* p, int number)
     : Table(p,AsciiTbl,number)
   {
 
@@ -128,7 +128,7 @@ namespace CCfits {
    delete [] tbcol;
   }
 
-  AsciiTable * AsciiTable::clone (FITSBase* p) const
+  AsciiTable * AsciiTable::clone (FITS* p) const
   {
   AsciiTable* cloned = new AsciiTable(*this);
   cloned->parent() = p;
@@ -254,7 +254,7 @@ namespace CCfits {
         diag += name(); // name of ascii table extension 
         throw InvalidColumnSpecification(diag);      
     }    
-    if (Tstring && repeatWidth < 1)
+    if (type == Tstring && repeatWidth < 1)
     {   
             diag += " length of string values unspecified for Column:  ";
             diag += columnName;

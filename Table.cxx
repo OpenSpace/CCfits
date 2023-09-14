@@ -63,67 +63,106 @@ namespace CCfits {
   copyData(right);
   }
 
-  Table::Table (FITSBase* p, HduType xtype, const String &hduName, int rows, const std::vector<String>& columnName, const std::vector<String>& columnFmt, const std::vector<String>& columnUnit, int version)
-      : ExtHDU(p, xtype, hduName,  8, 2, std::vector<long>(2), version),
-	 m_numCols(columnName.size()), m_column()
+  Table::Table (FITS* p, HduType xtype, const String &hduName, int rows, 
+                const std::vector<String>& columnName, 
+                const std::vector<String>& columnFmt, 
+                const std::vector<String>& columnUnit, int version)
+    : ExtHDU(p, xtype, hduName, 8, 2, std::vector<long>(2), version),
+    m_numCols(columnName.size()), 
+    m_column()
   {
 
-   int      status=0;
+    int      status=0;
+    
+    // remember this is the writing constructor so user must specify
+    // what kind of extension this is.
+    int tblType = xtype;
 
-   // remember this is the writing constructor so user must specify
-   // what kind of extension this is.
-   int tblType = xtype;
+    naxes(1) = rows;
 
-   naxes(1) = rows;
+    const size_t n(columnName.size());
+    //FITSUtil::auto_array_ptr<char*> pCname(new char*[n]);
+    //FITSUtil::auto_array_ptr<char*> pCformat(new char*[n]);
+    //FITSUtil::auto_array_ptr<char*> pCunit(new char*[n]);
+    char** cname = new char*[n];
+    char** cformat = new char*[n];
+    char** cunit = new char*[n];
+    char nullString[] = {'\0'};
 
-   const size_t n(columnName.size());
-   //FITSUtil::auto_array_ptr<char*> pCname(new char*[n]);
-   //FITSUtil::auto_array_ptr<char*> pCformat(new char*[n]);
-   //FITSUtil::auto_array_ptr<char*> pCunit(new char*[n]);
-   char** cname = new char*[n];
-   char** cformat = new char*[n];
-   char** cunit = new char*[n];
-   char nullString[] = {'\0'};
+    for (size_t i = 0; i < n; ++i)
+    {
+         cname[i] = const_cast<char*>(columnName[i].c_str());       
+         cformat[i] =  const_cast<char*>(columnFmt[i].c_str());
+         if (i < columnUnit.size())       
+            cunit[i]  = const_cast<char*>(columnUnit[i].c_str());
+         else
+            cunit[i] = nullString;
+    }
 
-   for (size_t i = 0; i < n; ++i)
-   {
-        cname[i] = const_cast<char*>(columnName[i].c_str());       
-        cformat[i] =  const_cast<char*>(columnFmt[i].c_str());
-        if (i < columnUnit.size())       
-           cunit[i]  = const_cast<char*>(columnUnit[i].c_str());
-        else
-           cunit[i] = nullString;
-   }
+    fits_create_tbl(fitsPointer(), tblType, rows , m_numCols, cname,
+     cformat, cunit, const_cast<char*>(hduName.c_str()), &status);
+    if (!status && version > 1)
+    {
+       char extver[] = "EXTVER";
+       fits_write_key(fitsPointer(), Tint, extver, &version, 0, &status);
+    } 
 
+    if (status)
+    {
+            delete [] cname;
+            delete [] cformat;
+            delete [] cunit;
+            throw FitsError(status);
+    } 
 
-   fits_create_tbl(fitsPointer(), tblType, rows , m_numCols, cname,
-	  cformat, cunit, const_cast<char*>(hduName.c_str()), &status);
-   if (!status && version > 1)
-   {
-      char extver[] = "EXTVER";
-      fits_write_key(fitsPointer(), Tint, extver, &version, 0, &status);
-   } 
-   
-   if (status)
-   {
-           delete [] cname;
-           delete [] cformat;
-           delete [] cunit;
-           throw FitsError(status);
-   } 
+    delete[] cname;
+    delete[] cformat;
+    delete[] cunit;
+  }
+  
+  Table::Table (FITS* p, int version, const String & groupName)
+    : ExtHDU(p, BinaryTbl, "GROUPING", 8, 2, std::vector<long>(2), version),
+    m_column()
+  {
+    // +++ I think there are too many other variables I'd like to pass in, so I want a new constructor.
+    //     ie: if we want to tailor later and allow GT_ID_REF, etc
+    //     I may update this constructor to pass in that variable now, and just have a default = GT_ID_ALL_URI
+    
+    int status=0;
 
-   delete[] cname;
-   delete[] cformat;
-   delete[] cunit;
+    // create the grouping table
+    if ( fits_create_group(fitsPointer(), const_cast<char*>(groupName.c_str()), GT_ID_ALL_URI, &status) ) throw FitsError(status, false);
+    
+    // now move to the new extension
+    // +++ no, I can't do this until addExtension() in addGroupTable()
+  
+    // +++ the GRPNAME keyword is already there.  Do I need to add it to the object members?
+    // +++ same with EXTVER (m_version was updated in the ExtHDU ctor)
+    //     should I use HDU::readAllKeys ()? (in addGroupTable()?)
+    
+//    // +++ or use Keyword& HDU::addKey(const String& name, T value,  const String& comment) ?
+//    try {
+//      addKey("GRPNAME", groupName, "");
+//    } catch (...) {
+//      std::cout << "caught addKey" << std::endl;
+//    }
+//    
+//    // update the m_numCols data member
+//    try {
+//      if ( fits_get_num_cols (fitsPointer(), &m_numCols, &status) ) throw FitsError(status, false);  
+//    } catch (...) {
+//      std::cout << "caught third status" << std::endl;
+//    }
+    
   }
 
-  Table::Table (FITSBase* p, HduType xtype, const String &hduName, int version)
+  Table::Table (FITS* p, HduType xtype, const String &hduName, int version)
       : ExtHDU(p,xtype,hduName,version), m_numCols(0), m_column()
   {
     getVersion();
   }
 
-  Table::Table (FITSBase* p, HduType xtype, int number)
+  Table::Table (FITS* p, HduType xtype, int number)
   : ExtHDU(p,xtype,number),
   m_numCols(0),
   m_column()
@@ -303,7 +342,31 @@ namespace CCfits {
     long numrows(0);
     int status(0);
     if (fits_get_num_rows(fitsPointer(),&numrows,&status) ) throw FitsError(status);
+    long oldrows = naxes(1);
     naxes(1,numrows);
+    
+    // If the number of rows has changed, it could be due to
+    // a write operation into a single column.  Therefore other
+    // previously read columns will no longer be up-to-date,
+    // as seen by their m_data buffers not matching the new 
+    // nRows in table.
+    
+    // If we got here from Table's insertRows or deleteRows,
+    // every column WILL have had it's m_data storage updated.
+    if (oldrows != numrows)
+    {
+       ColMap::iterator itCol = m_column.begin();
+       ColMap::iterator itColEnd = m_column.end();
+       while (itCol != itColEnd)
+       {
+          const long curStorage =
+              static_cast<long>(itCol->second->getStoredDataSize());
+          if (curStorage != numrows)
+             itCol->second->isRead(false);
+          ++itCol;  
+       }
+    }
+
   }
 
   void Table::setColumn (const String& colname, Column* value)

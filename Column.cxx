@@ -386,7 +386,7 @@ namespace CCfits {
                 fits_read_key_lng(fitsPointer(),dmax,pl+3,0,&status);
                 if (status != 0) pl[3] = ULIMITUSHORT;
                 for (j = 0; j < 4; ++j) pus[j] = pl[j];
-                if (m_repeat == 1)
+                if (m_repeat == 1 && type > 0)
                 {
                         ColumnData<unsigned short>& col = 
                                 dynamic_cast<ColumnData<unsigned short>&>(*this);
@@ -755,7 +755,7 @@ namespace CCfits {
         col.writeData(indata,firstRow);
 
     }
-    catch (std::bad_cast)
+    catch (std::bad_cast&)
     {
         throw WrongColumnType(" downcasting string column ");       
     }
@@ -795,7 +795,7 @@ namespace CCfits {
 #endif
                                 col.writeData(tmp,firstRow);
                            }
-                           catch (std::bad_cast)
+                           catch (std::bad_cast&)
                            {
                                  String msg(" implicit conversion from complex to real data not allowed: Column ");
                                  msg += name();
@@ -838,7 +838,7 @@ namespace CCfits {
                                 col.writeData(__tmp,firstRow);
 
                            }
-                           catch (std::bad_cast)
+                           catch (std::bad_cast&)
                            {
                                  String msg(" implicit conversion from complex to real data not allowed: Column ");
                                  msg += name();
@@ -877,7 +877,7 @@ namespace CCfits {
                 FITSUtil::fill(vals,col.data(),first,last);               
 #endif
 			}
-            catch (std::bad_cast)
+            catch (std::bad_cast&)
             {
                 throw WrongColumnType(" downcasting string column ");       
             }
@@ -922,7 +922,7 @@ namespace CCfits {
                                FITSUtil::fill(vals,col.data(),first,last);
 #endif
                           }
-                          catch (std::bad_cast)
+                          catch (std::bad_cast&)
                           {
                                 String msg(" implicit conversion from complex to real data not allowed: Column ");
                                 msg += name();
@@ -971,7 +971,7 @@ namespace CCfits {
                              FITSUtil::fill(vals,col.data(),first,last);
 #endif
                         }
-                        catch (std::bad_cast)
+                        catch (std::bad_cast&)
                         {
                               String msg(" implicit conversion from complex to real data not allowed: Column ");
                               msg += name();
@@ -1022,7 +1022,7 @@ namespace CCfits {
                             FITSUtil::fill(vals,col.data(row));
 
                        }
-                       catch (std::bad_cast)
+                       catch (std::bad_cast&)
                        {
                               String 
                         msg(" implicit conversion from complex to real data not allowed: Column ");
@@ -1076,7 +1076,7 @@ namespace CCfits {
                             FITSUtil::fill(vals,col.data(row));
 
                        }
-                       catch (std::bad_cast)
+                       catch (std::bad_cast&)
                        {
                               String 
                         msg(" implicit conversion from complex to real data not allowed: Column ");
@@ -1120,7 +1120,7 @@ namespace CCfits {
                             FITSUtil::fill(vals,col.data(row));
 
                        }
-                       catch (std::bad_cast)
+                       catch (std::bad_cast&)
                        {
                               String 
                         msg(" implicit conversion from complex to real data not allowed: Column ");
@@ -1166,7 +1166,7 @@ namespace CCfits {
                             FITSUtil::fill(vals,col.data(row));
 
                        }
-                       catch (std::bad_cast)
+                       catch (std::bad_cast&)
                        {
                               String 
                         msg(" implicit conversion from complex to real data not allowed: Column ");
@@ -1219,7 +1219,7 @@ namespace CCfits {
                                  }
 
                         }
-                        catch (std::bad_cast)
+                        catch (std::bad_cast&)
                         {
                                       String 
                                 msg(" implicit conversion from complex to real data not allowed: Column ");
@@ -1273,7 +1273,7 @@ namespace CCfits {
                                  }
 
                         }
-                        catch (std::bad_cast)
+                        catch (std::bad_cast&)
                         {
                                       String 
                                 msg(" implicit conversion from complex to real data not allowed: Column ");
@@ -1318,7 +1318,7 @@ namespace CCfits {
                                 FITSUtil::fill(__tmp,indata);
                                 col.writeData(__tmp,nRows,firstRow);                              
                         }
-                        catch (std::bad_cast)
+                        catch (std::bad_cast&)
                         {
                                 String msg(" implicit conversion from complex to real data not allowed: Column ");
                                 msg += name();
@@ -1360,7 +1360,7 @@ namespace CCfits {
                                 FITSUtil::fill(__tmp,indata);
                                 col.writeData(__tmp,nRows,firstRow);                              
                         }
-                        catch (std::bad_cast)
+                        catch (std::bad_cast&)
                         {
                                 String msg(" implicit conversion from complex to real data not allowed: Column ");
                                 msg += name();
@@ -1430,7 +1430,7 @@ namespace CCfits {
                                 col.writeData(__tmp,vectorLengths,firstRow);
 
                         }
-                        catch (std::bad_cast)
+                        catch (std::bad_cast&)
                         {
                                 String msg(" implicit conversion from complex to real data not allowed: Column ");
                                 msg += name();
@@ -1472,7 +1472,7 @@ namespace CCfits {
                                 col.writeData(__tmp,vectorLengths,firstRow);
 
                         }
-                        catch (std::bad_cast)
+                        catch (std::bad_cast&)
                         {
                                 String msg(" implicit conversion from complex to real data not allowed: Column ");
                                 msg += name();
@@ -1545,7 +1545,7 @@ namespace CCfits {
                             }
                             col.writeData(__tmp,firstRow);
                         }
-                        catch (std::bad_cast)
+                        catch (std::bad_cast&)
                         {
                                 String msg
                         (" implicit conversion from complex to real data not allowed: Column ");
@@ -1586,7 +1586,7 @@ namespace CCfits {
                             }
                             col.writeData(__tmp,firstRow);
                         }
-                        catch (std::bad_cast)
+                        catch (std::bad_cast&)
                         {
                                 String msg
                         (" implicit conversion from complex to real data not allowed: Column ");

@@ -1,7 +1,10 @@
 PROJECT(CCfits)
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 
-# Allow the developer to select if Dynamic or Static libraries are built
+set (CMAKE_CXX_STANDARD_REQUIRED on)
+set (CMAKE_CXX_STANDARD 11)
+
+# Allow the developer to select whether to build Dynamic or Static libraries
 OPTION (BUILD_SHARED_LIBS "Build Shared Libraries" OFF)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}")
@@ -11,7 +14,7 @@ set (INCLUDE_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/include/CCfits")
 
 # Define project version
 SET(${PROJECT_NAME}_MAJOR_VERSION 2)
-SET(${PROJECT_NAME}_MINOR_VERSION 5)
+SET(${PROJECT_NAME}_MINOR_VERSION 6)
 SET(${PROJECT_NAME}_VERSION ${${PROJECT_NAME}_MAJOR_VERSION}.${${PROJECT_NAME}_MINOR_VERSION})
 SET(LIB_NAME CCfits)
 
@@ -42,10 +45,10 @@ SET(SRC_FILES
     ColumnData.cxx
     ColumnVectorData.cxx
     ExtHDU.cxx
-    FITSBase.cxx
     FITS.cxx
     FitsError.cxx
     FITSUtil.cxx
+    GroupTable.cxx
     HDUCreator.cxx
     HDU.cxx
     KeyData.cxx
@@ -72,4 +75,3 @@ install(FILES ${H_FILES} DESTINATION ${INCLUDE_INSTALL_DIR})
 #INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR} "${CMAKE_SOURCE_DIR}/../")
 #TARGET_LINK_LIBRARIES(cookbook ${LIB_NAME} ${CFITSIO_LIBRARY})
 #ADD_TEST(cookbook cookbook)
-

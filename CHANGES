@@ -1,3 +1,97 @@
+Changes for CCfits 2.6
+
+- For compatibility with C++17, removed dependencies on
+std::binary_function (4/21).
+   FITSUtil.h
+   
+- The internal HDU getScaling function is not properly handling the
+case where an image of unsigned integer type has a BZERO keyword
+but not a BSCALE.  The result is it wrongly assumes the image
+is a signed integer type.(4/21)
+   HDUCreator.cxx
+   
+- The keyword categories hardcoded and returned by the
+HDU::keywordCategories() function now apply only to the 
+HDU::copyAllKeys() function.  HDU::readAllKeys() is hardcoded
+to a separate (and larger) list of categories.  This is to allow
+readAllKeys() to retain its previous behavior, while copyAllKeys()
+default categories have been narrowed (see items below from 06-07/18).
+(03/21)
+   HDU.cxx
+   HDU.h
+   
+- Fixes to updating of Columns' internal buffers for certain cases
+of writes or insertions which add rows to a table. Also includes a
+speed increase to internal Column write function. (03/21)
+   Column.h
+   ColumnData.h
+   ColumnVectorData.h
+   Table.cxx
+
+- Bug fix needed for creation of ColumnVectorData<unsigned short>
+objects.  (06/20)
+   Column.cxx
+   
+- All std::bad_cast exceptions are now caught by reference. (09/19)
+   Column.cxx
+   ColumnT.h
+   FITS.cxx
+   KeywordT.h
+   PHDUT.h
+
+- Enable support of long string keywords (which use the CONTINUE key)
+  (8/18)
+   HDU.cxx,.h 
+   KeyData.cxx,.h
+   Keyword.cxx,.h
+   KeywordCreator.cxx,.h
+   NewKeyword.h
+
+- Replaced all uses of std::auto_ptr with std::unique_ptr.  This is made
+in tandem with configuration changes which add a C++11 compiler flag
+when necessary.  (08/18)
+   FITS.cxx
+   HDU.cxx
+   cookbook.cxx
+
+- Added capability for user to specify keyword categories to read/copy. 
+ Removed TYP_WCS_KEY,TYP_CMPRS_KEY from s_iKeywordCategories, as they are
+ file-specific keywords. (7/18)
+   HDU.cxx, .h
+   
+- Bug fix to writeHistory and writeComment functions.  When copying via
+the get/write functions, mult-line input was not properly formatted upon
+output. (07/18)
+   HDU.cxx
+
+- Removed FITSBase pattern (10/17)
+   FITSBase.cxx, .h
+   FITS.cxx, .h
+   ../BUILD_DIR/Makefile-CCfits
+   ExtHDU.cxx, .h
+   HDU.cxx, .h
+   CMakeLists.txt
+   HDUCreator.cxx, .h 
+   Table.cxx, .h  
+   AsciiTable.cxx, .h 
+   BinTable.cxx, .h  
+   PHDU.cxx, .h  
+   PrimaryHDU.h  
+   GroupTable.cxx, .h  
+   ImageExt.h
+
+- Removed TYP_CKSUM_KEY from s_iKeywordCategories.  It was copying the 
+CHECKSUM and DATASUM keywords from the infile to the outfile, which leads to 
+incorrect values for the outfile. (6/17)
+   HDU.cxx, .h
+
+- In 'CCfits' header aggregator file, added special treatment for
+cookbook build.  This is to allow the stand-alone CCfits to build the
+cookbook even when build directory is not named "CCfits".  (8/16)
+   cookbook.cxx
+   CCfits
+
+Changes for CCfits 2.5
 - For reading Keywords, added conversion of numerical types to strings.
 (12/15)
    Keyword.cxx, .h

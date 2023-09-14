@@ -6,7 +6,7 @@ includedir=@includedir@
 Name: CCfits
 Description: Object Oriented C++ Interface to CFITSIO Library
 Requires.private: cfitsio >= 3.08
-Version: 2.5
+Version: 2.6
 Libs: -L${libdir} -lCCfits
 Cflags: -I${includedir}
 

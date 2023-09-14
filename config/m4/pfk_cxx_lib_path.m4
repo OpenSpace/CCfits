@@ -5,7 +5,7 @@ dnl library used by the compiler.   Basically if $CXX is found in say
 dnl `/usr/local/bin' then the assumtion is that its library is found in 
 dnl `/usr/local/lib'.
 dnl
-dnl @version $Id: pfk_cxx_lib_path.m4,v 3.1 2006/10/31 22:55:46 irby Exp $
+dnl @version $Id$
 dnl @author Paul_Kunz@slac.stanford.edu
 dnl
 AC_DEFUN([PFK_CXX_LIB_PATH],

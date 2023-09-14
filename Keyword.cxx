@@ -35,17 +35,19 @@ namespace CCfits {
 
   Keyword::Keyword(const Keyword &right)
 	: m_keytype(right.m_keytype),
-        m_parent(0), // Can only assign parent when added to an HDU.
-	m_comment(right.m_comment),
-        m_name(right.m_name)
+    m_parent(0), // Can only assign parent when added to an HDU.
+    m_comment(right.m_comment),
+    m_name(right.m_name),
+    m_isLongStr(right.m_isLongStr)
   {
   }
 
-  Keyword::Keyword (const String &keyname, ValueType keytype, HDU* p, const String &comment)
+  Keyword::Keyword (const String &keyname, ValueType keytype, HDU* p, const String &comment, bool isLongStr)
 	: m_keytype(keytype),
-        m_parent(p),
-	m_comment(comment),
-        m_name(keyname)
+    m_parent(p),
+    m_comment(comment),
+    m_name(keyname),
+    m_isLongStr(isLongStr)
   {
   }
 

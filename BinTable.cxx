@@ -28,14 +28,14 @@ namespace CCfits {
   {
   }
 
-  BinTable::BinTable (FITSBase* p, const String &hduName, bool readFlag, const std::vector<String>& keys, int version)
+  BinTable::BinTable (FITS* p, const String &hduName, bool readFlag, const std::vector<String>& keys, int version)
       : Table(p, BinaryTbl, hduName, version)
   {
 
   init(readFlag,keys);
   }
 
-  BinTable::BinTable (FITSBase* p, const String &hduName, int rows, const std::vector<String>& columnName, const std::vector<String>& columnFmt, const std::vector<String>& columnUnit, int version)
+  BinTable::BinTable (FITS* p, const String &hduName, int rows, const std::vector<String>& columnName, const std::vector<String>& columnFmt, const std::vector<String>& columnUnit, int version)
       : Table(p, BinaryTbl, hduName, rows,  columnName, columnFmt, columnUnit, version)
   {
   long           repeat=0;
@@ -61,8 +61,14 @@ namespace CCfits {
 
   }
   }
+  
+  BinTable::BinTable (FITS* p, int version, const String & groupName)
+      : Table(p, version, groupName)
+  {
+    
+  }
 
-  BinTable::BinTable (FITSBase* p, int number)
+  BinTable::BinTable (FITS* p, int number)
         : Table(p,BinaryTbl,number)
   {
   init();
@@ -118,7 +124,7 @@ namespace CCfits {
    if (status != 0)  throw FitsError(status);
   }
 
-  BinTable * BinTable::clone (FITSBase* p) const
+  BinTable * BinTable::clone (FITS* p) const
   {
   BinTable* cloned = new BinTable(*this);
   cloned->parent() = p;
