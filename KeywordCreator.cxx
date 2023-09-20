@@ -55,10 +55,10 @@ namespace CCfits {
    return getKeywordFromCard(card, p, keyName);
   }
 
-  Keyword* KeywordCreator::createKeyword (const String& keyName, const String& comment)
+  Keyword* KeywordCreator::createKeyword (const String& keyName, const String& comment, bool isLongStr)
   {
-  if (m_keyword == 0) m_keyword = MakeKeyword(keyName,comment);
-  return m_keyword;
+    if (m_keyword == 0) m_keyword = MakeKeyword(keyName,comment,isLongStr);
+    return m_keyword;
   }
 
   Keyword* KeywordCreator::getKeyword (const String& keyName, ValueType keyType, HDU* p)
@@ -94,11 +94,12 @@ namespace CCfits {
 
    String value(v);
    String comment(com);
-
-   if (KeywordCreator::isContinued(value))
+   bool isLongStr = KeywordCreator::isContinued(value);
+   
+   if (isLongStr)
    {
       bool restoreQuote = value[0] == '\'';
-      KeywordCreator::getLongValueString(p, keyName, value);
+      KeywordCreator::getLongValueString(p, keyName, value, comment);
       if (restoreQuote)
       {
          value = '\'' + value + '\'';
@@ -114,7 +115,7 @@ namespace CCfits {
    switch (keyType)
    {
         case Tstring: 
-	        readKey = new KeyData<String>(keyName, Tstring, value, p, comment);
+	        readKey = new KeyData<String>(keyName, Tstring, value, p, comment, isLongStr);
 	        break;
         case Tlogical: 
                 vstream >> bvalue;
@@ -184,11 +185,15 @@ namespace CCfits {
     {
             throw FitsError(status);    
     }
+    String commentString(comment);
     String valString(value);
-    if (KeywordCreator::isContinued(valString))
+    bool isLongStr = KeywordCreator::isContinued(valString);
+
+    if (isLongStr)
     {
        bool restoreQuote = valString[0] == '\'';
-       KeywordCreator::getLongValueString(p, String(key), valString);
+       
+       KeywordCreator::getLongValueString(p, String(key), valString, commentString);
        if (restoreQuote)
        {
           valString = '\'' + valString + '\'';
@@ -201,11 +206,11 @@ namespace CCfits {
     }
     else
     {
-        return parseRecord(String(key),valString,String(comment),p);
+        return parseRecord(String(key),valString,commentString,p,isLongStr);
     }
   }
 
-  Keyword* KeywordCreator::parseRecord (const String& name, const String& valueString, const String& comment, HDU* hdu)
+  Keyword* KeywordCreator::parseRecord (const String& name, const String& valueString, const String& comment, HDU* hdu, bool isLongStr)
   {
 
      char keyType('\0');
@@ -273,8 +278,11 @@ namespace CCfits {
 	   return new KeyData<std::complex<float> >(name, Tcomplex, xvalue, hdu, comment);
         case 'C':
         default:
-	   return  new KeyData<String>(name, Tstring, 
-                        value.substr(0,value.find_last_not_of(" ")+1),hdu, comment);                 
+	   return new KeyData<String>(name, Tstring, 
+                                value.substr(0,value.find_last_not_of(" ")+1),
+                                hdu, 
+                                comment,
+                                isLongStr);
      }
      return 0;
   }
@@ -297,19 +305,24 @@ namespace CCfits {
     return status;
   }
 
-  void KeywordCreator::getLongValueString (HDU* p, const String& keyName, String& value)
+  void KeywordCreator::getLongValueString (HDU* p, const String& keyName, String& value, String& comment)
   {
     char* lv = 0;
+    FITSUtil::auto_array_ptr<char> pComment(new char[FLEN_COMMENT]);
+    char* comm = pComment.get();
     int status = 0;
+    
     // The following function actually allocates the memory for the
     // lv string - very unusual for cfitsio.
     if (fits_read_key_longstr(p->fitsPointer(), const_cast<char*>(keyName.c_str()), 
-                &lv, 0, &status))
+                &lv, comm, &status))
     {
        free(lv);
        throw FitsError(status);
     }
+    
     value = String(lv);
+    comment = String(comm);
     free(lv);
   }
   
@@ -335,17 +348,18 @@ namespace CCfits {
              throw FitsError(status);
 
      String valString(v);
+     String commentString(com);
      if (KeywordCreator::isContinued(valString))
      {
         bool restoreQuote = valString[0] == '\'';
-        KeywordCreator::getLongValueString(p, keywordName, valString);
+        KeywordCreator::getLongValueString(p, keywordName, valString, commentString);
         if (restoreQuote)
         {
            valString = '\'' + valString + '\'';
         }
      }
 
-     return parseRecord(keywordName,valString,String(com),p);
+     return parseRecord(keywordName,valString,commentString,p);
   }
 
   // Additional Declarations

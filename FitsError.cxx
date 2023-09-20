@@ -63,7 +63,7 @@ namespace CCfits {
   FitsFatal::FitsFatal (const string& diag)
   {
      std::cerr << "*** CCfits Fatal Error: " << diag 
-               << " please report this to xanprob@olegacy.gsfc.nasa.gov\n";
+               << " please report this to ccfits@heasarc.gsfc.nasa.gov\n";
 
 #ifdef TERMINATE_DEFECT
      // terminate() is not there as documented

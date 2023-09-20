@@ -33,14 +33,33 @@ namespace CCfits
         template<>
         void KeyData<String>::write() 
         {
-           Keyword::write();
-           int status = 0;
-           if (fits_update_key(fitsPointer(), Tstring, 
-			           const_cast<char *>(name().c_str()),
-			           const_cast<char*>(m_keyval.c_str()),
-			           const_cast<char *>(comment().c_str()), 
-			           &status)) throw FitsError(status);
-
+          Keyword::write();
+          int status = 0;
+          // if the user specified that this is a long string, use the
+          // Long String Keyword convention that is described in the
+          // 'Local FITS Conventions'
+          // https://heasarc.gsfc.nasa.gov/fitsio/c/c_user/node116.html
+          if (isLongStr()) {
+            if (fits_write_key_longstr(fitsPointer(),
+                const_cast<char *>(name().c_str()),
+                const_cast<char*>(m_keyval.c_str()),
+                const_cast<char *>(comment().c_str()),
+                &status)) throw FitsError(status);
+            // also write the LONGSTRN keyword
+            if (fits_write_key_longwarn(fitsPointer(), &status))
+                throw FitsError(status);
+          } else {
+            // the user did not specify the long string convention.
+            // use the normal fits key writing routine, which truncates
+            // to 68 characters
+            if (fits_update_key(fitsPointer(), Tstring,
+                const_cast<char *>(name().c_str()),
+                const_cast<char*>(m_keyval.c_str()),
+                const_cast<char *>(comment().c_str()),
+                &status)) throw FitsError(status);
+          }
+            // +++ 20180808 KLR TODO do we also want to make sure m_keyval is
+            //     truncated, so the data member reflects what cfitsio is doing?
         }
 
         template<>

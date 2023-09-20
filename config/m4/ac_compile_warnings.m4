@@ -5,7 +5,7 @@ dnl Currently supports g++ and gcc.
 dnl This macro must be put after AC_PROG_CC and AC_PROG_CXX in
 dnl configure.in
 dnl
-dnl @version $Id: ac_compile_warnings.m4,v 3.0 2002/06/18 14:47:53 dorman Exp $
+dnl @version $Id$
 dnl @author Loic Dachary <loic@senga.org> modified by Ben Dorman (ben.dorman@gsfc.nasa.gov) to add verbose options for SunPro CC
 dnl
 AC_DEFUN([AC_COMPILE_WARNINGS],

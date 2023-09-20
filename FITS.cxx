@@ -10,8 +10,6 @@
 #include "Table.h"
 // PHDU
 #include "PHDU.h"
-// FITSBase
-#include "FITSBase.h"
 // PrimaryHDU
 #include "PrimaryHDU.h"
 // FITS
@@ -40,7 +38,12 @@ using std::cerr;
 
 
 namespace CCfits {
+  
+  typedef  std::multimap<string,ExtHDU*> ExtMap;
+  typedef  std::multimap<string,ExtHDU*>::iterator ExtMapIt;
+  typedef  std::multimap<string,ExtHDU*>::const_iterator ExtMapConstIt;
 
+  
   // Class CCfits::FITS::NoSuchHDU 
 
   FITS::NoSuchHDU::NoSuchHDU (const String& diag, bool silent)
@@ -85,304 +88,279 @@ namespace CCfits {
   // Class CCfits::FITS 
   bool FITS::s_verboseMode = false;
 
-  FITS::FITS (const String &name, RWmode mode, bool readDataFlag, const std::vector<String>& primaryKeys)
-  : m_FITSImpl(0)
+  FITS::FITS (const String &fileName, RWmode rwmode, bool readDataFlag, const std::vector<String>& primaryKeys)
+  : m_currentCompressionTileDim(0),
+    m_mode(rwmode), m_currentExtensionName(""), m_filename(fileName),
+    m_pHDU(0), m_extension(), m_fptr(0)
   {
-     std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
-     m_FITSImpl = apBase.get();
-
-     if (mode == Read) 
-     {
-        // If name includes extended file syntax, the initial hdu position
-        // upon opening is not necessarily the primary header.
-        int hduIdx = open(mode);
-
-        // Read the primary header.  This also moves the current hdu
-        // to the primary.
-        read(readDataFlag,primaryKeys);
-
-        readExtensions(readDataFlag);
-
-        // If extended syntax asked for a particular extension,
-        // restore it as the current hdu position.
-        if (hduIdx)
-        {
-           // This also calls makeThisCurrent.
-           extension(hduIdx);
-        }
-     }
-     else
-     {
-
-        // create a primary header in the receiving structure. 
-        // PHDU has a private constructor and must be instantiated here only.
-        // this ensures that every FITS object has exactly one PHDU.
-        if (create() )
-        {
-           // create returns true if the file is either new
-           // or overwritten, in which case we need to create 
-           // and write a new primary with BITPIX=8 and NAXIS=0.
-           // Also if in here, no extended syntax was used.
-           HDUCreator makePrimary(m_FITSImpl);
-
-           pHDU(makePrimary.createImage(8,0,std::vector<long>()));       
-        }
-        else
-        {
-           // The create call above will have opened the file in rw mode.  
-           read(readDataFlag,primaryKeys);
-           readExtensions(readDataFlag);
-           // For backwards compatibility, reposition the current HDU to
-           // be the primary.  (In earlier versions, only the primary was
-           // ever read when opening a pre-existing file in Write mode.)
-           resetPosition();
-        }
-     }
-     apBase.release();
-  }
-
-  FITS::FITS (const String &name, RWmode mode, const string &hduName, bool readDataFlag, const std::vector<String>& hduKeys, const std::vector<String>& primaryKey, int version)
-  : m_FITSImpl(0)
-  {
-          std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
-          m_FITSImpl = apBase.get();
-
-          int extSyntHdu = open(mode);
-
-          // create and read the Primary: assume here that a single HDU other than
-          // the primary is requested, so don't read primary data. We can however
-          // read some header info from the primary if (optionally) specified.
-
-          read(false,primaryKey);
-
-          read(hduName, readDataFlag, hduKeys,version);
-          if (extSyntHdu && 
-                currentExtension().index() != extSyntHdu)
-          {
-	    std::ostringstream msg;
-	    msg << "Hdu (" << hduName << ") requested with extended syntax ("
-		<< extSyntHdu << ") differs from that requested by name argument ("
-		<< currentExtension().index() << ").";
-	    throw OperationNotSupported(msg.str());
-          }
-
-          apBase.release();
-  }
-
-  FITS::FITS (const String &name, RWmode mode, const std::vector<String>& hduNames, bool readDataFlag, const std::vector<String>& primaryKey)
-  : m_FITSImpl(0)
-  {
-        std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
-        m_FITSImpl = apBase.get();
-
-        int extSyntHdu = open(mode);
-
-        read(readDataFlag,primaryKey);
-        read(hduNames,readDataFlag);
-
-        if (extSyntHdu)
-        {
-           // If hdu specified in extension is not included in
-           // hduNames, throw.
-           bool savVerbose = s_verboseMode;
-           s_verboseMode = false;
-           try
-           {
-              extension(extSyntHdu);
-           }
-           catch (...)
-           {
-              s_verboseMode = savVerbose;
-              string msg("Hdu requested with extended syntax was not included ");
-              msg += "in FITS constructor hduNames array.";
-              throw OperationNotSupported(msg);
-           }
-           s_verboseMode = savVerbose;
-        }
-
-        apBase.release();
-  }
-
-  FITS::FITS (const String& fileName, const FITS& source)
-    : m_FITSImpl(0)
-  {
-    std::unique_ptr<FITSBase> apBase(new FITSBase(fileName,Write));
-    m_FITSImpl = apBase.get();
-
-    if (create() )
+    if (rwmode == Read) 
     {
-            // create returns true if the file is either new
-            // or overwritten, in which case we need to create 
-            // and write a new primary which is a clone of the source PHDU.
+      // If name includes extended file syntax, the initial hdu position
+      // upon opening is not necessarily the primary header.
+      int hduIdx = open(rwmode);
 
-            pHDU(static_cast<PHDU*>(source.pHDU().clone(m_FITSImpl)));       
+      // Read the primary header.  This also moves the current hdu
+      // to the primary.
+      read(readDataFlag,primaryKeys);
+
+      readExtensions(readDataFlag);
+
+      // If extended syntax asked for a particular extension,
+      // restore it as the current hdu position.
+      if (hduIdx)
+      {
+         // This also calls makeThisCurrent.
+         extension(hduIdx);
+      }
     }
     else
     {
-       // Assume file already exists and user is not attempting to
-       // overwrite with the '!' symbol.
-       throw CantCreate(fileName);
+
+      // create a primary header in the receiving structure. 
+      // PHDU has a private constructor and must be instantiated here only.
+      // this ensures that every FITS object has exactly one PHDU.
+      if (create() )
+      {
+         // create returns true if the file is either new
+         // or overwritten, in which case we need to create 
+         // and write a new primary with BITPIX=8 and NAXIS=0.
+         // Also if in here, no extended syntax was used.
+         HDUCreator makePrimary(this);
+
+         pHDU(makePrimary.createImage(8,0,std::vector<long>()));       
+      }
+      else
+      {
+         // The create call above will have opened the file in rw mode.  
+         read(readDataFlag,primaryKeys);
+         readExtensions(readDataFlag);
+         // For backwards compatibility, reposition the current HDU to
+         // be the primary.  (In earlier versions, only the primary was
+         // ever read when opening a pre-existing file in Write mode.)
+         resetPosition();
+      }
+    }
+  }
+
+  FITS::FITS (const String &fileName, RWmode rwmode, const string &hduName, bool readDataFlag, const std::vector<String>& hduKeys, const std::vector<String>& primaryKey, int version)
+  : m_currentCompressionTileDim(0),
+    m_mode(rwmode), m_currentExtensionName(""), m_filename(fileName),
+    m_pHDU(0), m_extension(), m_fptr(0)
+  {
+    int extSyntHdu = open(rwmode);
+
+    // create and read the Primary: assume here that a single HDU other than
+    // the primary is requested, so don't read primary data. We can however
+    // read some header info from the primary if (optionally) specified.
+
+    read(false,primaryKey);
+
+    read(hduName, readDataFlag, hduKeys,version);
+    if (extSyntHdu && currentExtension().index() != extSyntHdu)
+    {
+      std::ostringstream msg;
+      msg << "Hdu (" << hduName << ") requested with extended syntax ("
+          << extSyntHdu << ") differs from that requested by name argument ("
+          << currentExtension().index() << ").";
+      throw OperationNotSupported(msg.str());
+    }
+  }
+
+  FITS::FITS (const String &fileName, RWmode rwmode, const std::vector<String>& hduNames, bool readDataFlag, const std::vector<String>& primaryKey)
+  : m_currentCompressionTileDim(0),
+    m_mode(rwmode), m_currentExtensionName(""), m_filename(fileName),
+    m_pHDU(0), m_extension(), m_fptr(0)
+  {
+    int extSyntHdu = open(rwmode);
+
+    read(readDataFlag,primaryKey);
+    read(hduNames,readDataFlag);
+
+    if (extSyntHdu)
+    {
+      // If hdu specified in extension is not included in
+      // hduNames, throw.
+      bool savVerbose = s_verboseMode;
+      s_verboseMode = false;
+      try
+      {
+         extension(extSyntHdu);
+      }
+      catch (...)
+      {
+         s_verboseMode = savVerbose;
+         string msg("Hdu requested with extended syntax was not included ");
+         msg += "in FITS constructor hduNames array.";
+         throw OperationNotSupported(msg);
+      }
+      s_verboseMode = savVerbose;
+    }
+  }
+
+  FITS::FITS (const String& fileName, const FITS& source)
+  : m_currentCompressionTileDim(0),
+    m_mode(Write), m_currentExtensionName(""), m_filename(fileName),
+    m_pHDU(0), m_extension(), m_fptr(0)
+  {
+    if (create() )
+    {
+      // create returns true if the file is either new
+      // or overwritten, in which case we need to create 
+      // and write a new primary which is a clone of the source PHDU.
+
+      pHDU(static_cast<PHDU*>(source.pHDU().clone(this)));       
+    }
+    else
+    {
+      // Assume file already exists and user is not attempting to
+      // overwrite with the '!' symbol.
+      throw CantCreate(fileName);
     }    
     int status(0);
 
     source.pHDU().makeThisCurrent();
 
-    if (fits_copy_hdu(source.fitsPointer(),m_FITSImpl->fptr(),0,&status)) throw FitsError(status);
-    apBase.release();
+    if (fits_copy_hdu(source.fitsPointer(),m_fptr,0,&status)) throw FitsError(status);
   }
 
-  FITS::FITS (const String &name, RWmode mode, const std::vector<String>& hduNames, const std::vector<std::vector<String> >& hduKeys, bool readDataFlag, const std::vector<String>& primaryKeys, const std::vector<int>& hduVersions)
-  : m_FITSImpl(0)
+  FITS::FITS (const String &fileName, RWmode rwmode, const std::vector<String>& hduNames, const std::vector<std::vector<String> >& hduKeys, bool readDataFlag, const std::vector<String>& primaryKeys, const std::vector<int>& hduVersions)
+  : m_currentCompressionTileDim(0),
+    m_mode(rwmode), m_currentExtensionName(""), m_filename(fileName),
+    m_pHDU(0), m_extension(), m_fptr(0)
   {
-     std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
-     m_FITSImpl = apBase.get();
+    int extSyntHdu = open(rwmode);
 
-     int extSyntHdu = open(mode);
+    // read the primary header and read the data if readDataFlag is set.
+    read(readDataFlag,primaryKeys);
 
-     // read the primary header and read the data if readDataFlag is set.
-     read(readDataFlag,primaryKeys);
+    read(hduNames, hduKeys, readDataFlag, hduVersions);
 
-     read(hduNames, hduKeys, readDataFlag, hduVersions);
-
-     if (extSyntHdu)
-     {
-        // If hdu specified in extension is not included in
-        // hduNames, throw.
-        bool savVerbose = s_verboseMode;
-        s_verboseMode = false;
-        try
-        {
-           extension(extSyntHdu);
-        }
-        catch (...)
-        {
-           s_verboseMode = savVerbose;
-           string msg("Hdu requested with extended syntax was not included ");
-           msg += "in FITS constructor hduNames array.";
-           throw OperationNotSupported(msg);
-        }
+    if (extSyntHdu)
+    {
+      // If hdu specified in extension is not included in
+      // hduNames, throw.
+      bool savVerbose = s_verboseMode;
+      s_verboseMode = false;
+      try
+      {
+        extension(extSyntHdu);
+      }
+      catch (...)
+      {
         s_verboseMode = savVerbose;
-     }
-
-     apBase.release();
+        string msg("Hdu requested with extended syntax was not included ");
+        msg += "in FITS constructor hduNames array.";
+        throw OperationNotSupported(msg);
+      }
+      s_verboseMode = savVerbose;
+    }
   }
 
-  FITS::FITS (const String& name, int bitpix, int naxis, long *naxes)
-  : m_FITSImpl(0)
+  FITS::FITS (const String& fileName, int bitpix, int naxis, long *naxes)
+  : m_currentCompressionTileDim(0),
+    m_mode(Write), m_currentExtensionName(""), m_filename(fileName),
+    m_pHDU(0), m_extension(), m_fptr(0)
   {
-        std::unique_ptr<FITSBase> apBase(new FITSBase(name,Write));
-        m_FITSImpl = apBase.get();
+    std::vector<long>    va_naxes(naxis);
+    std::copy(&naxes[0],&naxes[naxis],va_naxes.begin());
 
-        std::vector<long>    va_naxes(naxis);
-        std::copy(&naxes[0],&naxes[naxis],va_naxes.begin());
+    if (!create())
+    {
+      // Assume file already exists and user did not specify overwrite
+      // with the '!' symbol.
+      throw CantCreate(fileName);
+    }
 
-        if (!create())
-        {
-           // Assume file already exists and user did not specify overwrite
-           // with the '!' symbol.
-           throw CantCreate(name);
-        }
+    // create an HDU factory.
+    HDUCreator makePrimary(this);
 
-        // create an HDU factory.
-        HDUCreator makePrimary(m_FITSImpl);
+    // set the PrimaryHDU. bitpix will determine the data type.
+    pHDU(makePrimary.createImage(bitpix,naxis,va_naxes));
 
-        // set the PrimaryHDU. bitpix will determine the data type.
-        pHDU(makePrimary.createImage(bitpix,naxis,va_naxes));
-
-        // If file name is explicitly indicating image compression,
-        // pHDU won't hold the image.  Therefore need to create an
-        // extension here.
-        string::size_type compressLoc = 
-                FITSUtil::checkForCompressString(m_FITSImpl->name());
-        if (compressLoc != string::npos)
-        {
-           HDUCreator newImage(m_FITSImpl);
-           ExtHDU* newHDU = newImage.createImage(string("NoName"),bitpix, naxis, va_naxes, 1);  
-           addExtension(newHDU);
-           string actualFileName(m_FITSImpl->name().substr(0, compressLoc));
-           m_FITSImpl->name() = actualFileName;
-           m_FITSImpl->currentCompressionTileDim(naxis);
-        }
-        apBase.release();
+    // If file name is explicitly indicating image compression,
+    // pHDU won't hold the image.  Therefore need to create an
+    // extension here.
+    string::size_type compressLoc = 
+            FITSUtil::checkForCompressString(name());
+    if (compressLoc != string::npos)
+    {
+      HDUCreator newImage(this);
+      ExtHDU* newHDU = newImage.createImage(string("NoName"),bitpix, naxis, va_naxes, 1);  
+      addExtension(newHDU);
+      string actualFileName(name().substr(0, compressLoc));
+      m_filename = actualFileName;
+      currentCompressionTileDim(naxis);
+    }
   }
 
-  FITS::FITS (const string &name, RWmode mode, int hduIndex, bool readDataFlag, const std::vector<String>& hduKeys, const std::vector<String>& primaryKey)
-  : m_FITSImpl(0)
+  FITS::FITS (const string &fileName, RWmode rwmode, int hduIndex, bool readDataFlag, const std::vector<String>& hduKeys, const std::vector<String>& primaryKey)
+  : m_currentCompressionTileDim(0),
+    m_mode(rwmode), m_currentExtensionName(""), m_filename(fileName),
+    m_pHDU(0), m_extension(), m_fptr(0)
   {
-        std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
-        m_FITSImpl = apBase.get();
+    int extSyntHdu = open(rwmode);
+    if (extSyntHdu && extSyntHdu != hduIndex)
+    {
+      string msg("FITS constructor hduIndex conflicts with HDU requested by extended syntax.");
+      throw OperationNotSupported(msg);
+    }
+    // read the primary header. Allowing the user to read the primary data
+    // and optional keys costs nothing here, although the likely use of this
+    // constructor is to read a specified HDU from a file other than the Primary.
+    read(readDataFlag,primaryKey);
 
-        int extSyntHdu = open(mode);
-        if (extSyntHdu && extSyntHdu != hduIndex)
-        {
-           string msg("FITS constructor hduIndex conflicts with HDU requested by extended syntax.");
-           throw OperationNotSupported(msg);
-        }
-        // read the primary header. Allowing the user to read the primary data
-        // and optional keys costs nothing here, although the likely use of this
-        // constructor is to read a specified HDU from a file other than the Primary.
-        read(readDataFlag,primaryKey);
-
-        read(hduIndex,readDataFlag,hduKeys);
-        apBase.release();
+    read(hduIndex,readDataFlag,hduKeys);
   }
 
-  FITS::FITS (const String &name, RWmode mode, const std::vector<String>& searchKeys, const std::vector<String> &searchValues, bool readDataFlag, const std::vector<String>& hduKeys, const std::vector<String>& primaryKey, int version)
-  : m_FITSImpl(0)
+  FITS::FITS (const String &fileName, RWmode rwmode, const std::vector<String>& searchKeys, const std::vector<String> &searchValues, bool readDataFlag, const std::vector<String>& hduKeys, const std::vector<String>& primaryKey, int version)
+  : m_currentCompressionTileDim(0),
+    m_mode(rwmode), m_currentExtensionName(""), m_filename(fileName),
+    m_pHDU(0), m_extension(), m_fptr(0)
   {
-     std::unique_ptr<FITSBase> apBase(new FITSBase(name,mode));
-     m_FITSImpl = apBase.get();
+    open(rwmode);
 
-     open(mode);
+    // read the primary header and read the data if readDataFlag is set.
+    // create returns a PHDU if the index is 0.
+    read(false,primaryKey);
 
-     // read the primary header and read the data if readDataFlag is set.
-     // create returns a PHDU if the index is 0.
-
-     read(false,primaryKey);
-
-     // create a primary header in the receiving structure.
-     // PHDU has a private constructor and must be instantiated here only.
-     // this ensures that every FITS object has exactly one PHDU
-
-     read(searchKeys, searchValues, readDataFlag, hduKeys, version);
-
-     apBase.release();
+    // create a primary header in the receiving structure.
+    // PHDU has a private constructor and must be instantiated here only.
+    // this ensures that every FITS object has exactly one PHDU
+    read(searchKeys, searchValues, readDataFlag, hduKeys, version);
   }
-
 
   FITS::~FITS()
   {
     destroy();      
   }
-
-
+  
   void FITS::unmapExtension (ExtHDU& doomed)
   {
     const string& doomedName = doomed.name();
-    if ( extension().count(doomedName) == 1 )
+    if ( m_extension.count(doomedName) == 1 )
     {
-        ExtMapIt x = extensionMap().lower_bound(doomedName);
-        delete (*x).second;       
-        extensionMap().erase(x);
+      ExtMapIt x = m_extension.lower_bound(doomedName);
+      delete (*x).second;       
+      m_extension.erase(x);
     }
     else
     {
-            std::pair<ExtMapIt,ExtMapIt> named = extensionMap().equal_range(doomedName);
+      std::pair<ExtMapIt,ExtMapIt> named = m_extension.equal_range(doomedName);
 
-            ExtMapIt x = named.first;
+      ExtMapIt x = named.first;
 
-            while ( x != named.second)
-            {
+      while ( x != named.second)
+      {
 
-                    if ( (*x).second->version() == doomed.version())
-                    {
-                        delete (*x).second;
-                        extensionMap().erase(x);       
-                        break;
-                    }       
-                    ++x;
-            }
-    }     
+        if ( (*x).second->version() == doomed.version())
+        {
+          delete (*x).second;
+          m_extension.erase(x);       
+          break;
+        }       
+        ++x;
+      }
+    }   
   }
 
   void FITS::clearErrors ()
@@ -396,8 +374,8 @@ namespace CCfits {
     ExtHDU& d = extension(doomed,version); // throws NoSuchHDU if it's not there.
     const int removeIdx = d.index();
     std::vector<ExtHDU*> trailingExts;
-    ExtMapConstIt itExtMap = m_FITSImpl->extension().begin();
-    ExtMapConstIt itExtMapEnd = m_FITSImpl->extension().end();
+    ExtMapConstIt itExtMap = m_extension.begin();
+    ExtMapConstIt itExtMapEnd = m_extension.end();
     while (itExtMap != itExtMapEnd)
     {
        if (itExtMap->second->index() > removeIdx)
@@ -405,7 +383,7 @@ namespace CCfits {
        ++itExtMap;
     }
 
-    if (fits_delete_hdu(fitsPointer(),0,&status)) throw FitsError(status);
+    if (fits_delete_hdu(m_fptr,0,&status)) throw FitsError(status);
     unmapExtension(d);
     // Reindex the extensions that follow the deleted.
     for (size_t i=0; i<trailingExts.size(); ++i)
@@ -417,25 +395,25 @@ namespace CCfits {
     int n(0);
     int status(0);
     int current(0);
-    if (fits_get_num_hdus(fitsPointer(),&n,&status)) throw FitsError(status);
-    fits_get_hdu_num(fitsPointer(),&current);
+    if (fits_get_num_hdus(m_fptr,&n,&status)) throw FitsError(status);
+    fits_get_hdu_num(m_fptr,&current);
 
     int count(0);
     for (int j = 2; j <= n; ++j)
     {
-        if (nameOfUnmapped(j) == inputName) ++count;
+      if (nameOfUnmapped(j) == inputName) ++count;
     }
-    if (fits_movabs_hdu(fitsPointer(),current,0,&status)) throw FitsError(status);
+    if (fits_movabs_hdu(m_fptr,current,0,&status)) throw FitsError(status);
     return count+1;      
   }
 
   void FITS::read (bool readDataFlag, const std::vector<String>& keys)
   {
      // Move to and create primary header object.
-   HDUCreator create(m_FITSImpl);
+   HDUCreator create(this);
 
    int status=0, hduType=0;
-   if (fits_movabs_hdu(m_FITSImpl->fptr(), 1, &hduType, &status))
+   if (fits_movabs_hdu(m_fptr, 1, &hduType, &status))
       throw FitsError(status);
    pHDU(static_cast<PHDU*>(create.getHdu(0,readDataFlag,keys)));
   }
@@ -450,7 +428,7 @@ namespace CCfits {
 
     if (!requested)
     {
-       HDUCreator create(m_FITSImpl);
+       HDUCreator create(this);
 
        try
        {
@@ -526,7 +504,7 @@ namespace CCfits {
 
     if (!requested)
     {
-       HDUCreator create(m_FITSImpl);
+       HDUCreator create(this);
 
        try
        {
@@ -552,8 +530,8 @@ namespace CCfits {
   {
   int totalHDUs = 1;
   int status = 0;
-  if (fits_get_num_hdus(m_FITSImpl->fptr(),&totalHDUs,&status) != 0) throw FitsError(status);
-  HDUCreator createTest(m_FITSImpl);
+  if (fits_get_num_hdus(m_fptr,&totalHDUs,&status) != 0) throw FitsError(status);
+  HDUCreator createTest(this);
 
   int hduIndex;
   // there's one less extension than total HDUs!
@@ -562,55 +540,55 @@ namespace CCfits {
   {
      try
      {
-         std::unique_ptr<ExtHDU> 
-         testHDU(static_cast<ExtHDU*>(createTest.getHdu(hduIndex,false,searchKeys)));
-         std::vector<String> testKeys(searchKeys);
-	      std::vector<String> testResults(searchKeys.size(),"");
-         // Missing key exceptions are caught and handled at a lower level.
-         // The result will be a smaller sized testKeys vector.
-	      testHDU->readKeys(testKeys,testResults); 
-         using namespace FITSUtil;
+        std::unique_ptr<ExtHDU> 
+	   testHDU(static_cast<ExtHDU*>(createTest.getHdu(hduIndex,false,searchKeys)));
+	std::vector<String> testKeys(searchKeys);
+	std::vector<String> testResults(searchKeys.size(),"");
+        // Missing key exceptions are caught and handled at a lower level.
+        // The result will be a smaller sized testKeys vector.
+	testHDU->readKeys(testKeys,testResults); 
+        using namespace FITSUtil;
 
-	      // first: we need to have matched as many keys as were input.
+	// first: we need to have matched as many keys as were input.
 
-         if (testKeys.size() == searchKeys.size()) 
-         {
-            // now go through and check the values that were read
-            // against the input value list.
-            size_t k = 0;
-            gotIt = true;   
-               std::vector<String>::const_iterator vi(searchValues.begin());   
-               std::vector<String>::const_iterator  viEnd(searchValues.end());   
+	if (testKeys.size() == searchKeys.size()) 
+	{
+	   // now go through and check the values that were read
+	   // against the input value list.
+	   size_t k = 0;
+	   gotIt = true;   
+           std::vector<String>::const_iterator vi(searchValues.begin());   
+          std::vector<String>::const_iterator  viEnd(searchValues.end());   
 
-               while (vi != viEnd && gotIt)
-            {
+           while (vi != viEnd && gotIt)
+	   {
 
-               if (vi->length())
-               {
-                        // we can at least ignore whitespace
-                        size_t first (testResults[k].find_first_not_of(" \t"));
-                        size_t last  (testResults[k].find_last_not_of(" \t"));
-               gotIt = (lowerCase(testResults[k].substr(first,last+first+1)) == lowerCase(*vi));
-               }
-                  ++k,++vi;
-            }
+	      if (vi->length())
+	      {
+                   // we can at least ignore whitespace
+                   size_t first (testResults[k].find_first_not_of(" \t"));
+                   size_t last  (testResults[k].find_last_not_of(" \t"));
+		   gotIt = (lowerCase(testResults[k].substr(first,last+first+1)) == lowerCase(*vi));
+	      }
+              ++k,++vi;
+	   }
 
-            if (gotIt)
-            {
-               if (version == 1) break;
-               else
-               {
-            int extver = 1;
-      #ifdef TEMPLATE_AMBIG_DEFECT
-            testHDU->readKeyMS("EXTVER",extver);
-      #else
-            testHDU->readKey("EXTVER",extver);                                        
-      #endif
-            if (extver == version) break;
-            else gotIt = false;
-               }
-            }
-         }
+	   if (gotIt)
+	   {
+	      if (version == 1) break;
+	      else
+	      {
+		 int extver = 1;
+#ifdef TEMPLATE_AMBIG_DEFECT
+		 testHDU->readKeyMS("EXTVER",extver);
+#else
+		 testHDU->readKey("EXTVER",extver);                                        
+#endif
+		 if (extver == version) break;
+		 else gotIt = false;
+	      }
+	   }
+	}
      }
 
      catch (HDU::NoSuchKeyword)
@@ -639,7 +617,7 @@ namespace CCfits {
   {
      String extname("");
      int extver = 1;
-     ExtHDU::readHduName(m_FITSImpl->fptr(),hduIndex,extname,extver);
+     ExtHDU::readHduName(m_fptr,hduIndex,extname,extver);
      read(extname,readDataFlag,hduKeys,extver);
      currentExtensionName(extname);
   }
@@ -663,21 +641,21 @@ namespace CCfits {
   }     
   }
 
-  int FITS::open (RWmode mode)
+  int FITS::open (RWmode rwmode)
   {
   int status=0;
   // unused:  bool silentMode = true;
 
-  status = fits_open_file(&m_FITSImpl->fptr(), m_FITSImpl->name().c_str(), mode, &status);
+  status = fits_open_file(&m_fptr, name().c_str(), rwmode, &status);
 
   if (status != 0)  
   {
-          if (status == FILE_NOT_OPENED) throw CantOpen(m_FITSImpl->name()); 
+          if (status == FILE_NOT_OPENED) throw CantOpen(name()); 
           else throw FitsError(status);
   }
 
   int currentHDU=0;
-  fits_get_hdu_num(m_FITSImpl->fptr(), &currentHDU);
+  fits_get_hdu_num(m_fptr, &currentHDU);
   // convert to 0-based
   currentHDU -= 1;
 
@@ -699,21 +677,21 @@ namespace CCfits {
      // otherwise create it. We let cfitsio worry about what
      // happens if open-with-write-mode or create fails.
      // but we must know whether the file exists.
-     string fName = m_FITSImpl->name();
-     if (m_FITSImpl->name()[0] == '!') 
+     string fName = m_filename;
+     if (fName[0] == '!') 
      {
-        m_FITSImpl->name() = fName.substr(1);
+        m_filename = fName.substr(1);
      }
 
      // Create a new file, the '!' is processed by ffinit.
      // If '[]' extended syntax is used this returns an error of
      // one kind or another (which includes FILE_NOT_CREATED if
      // the file already exists).
-     fits_create_file(&m_FITSImpl->fptr(),fName.c_str(),&status);
+     fits_create_file(&m_fptr,fName.c_str(),&status);
      if ( status )
      {
         // The open function must succeed, else we're left with
-        // a NULL m_FITSImpl->fptr() with which we can't continue.
+        // a NULL m_fptr with which we can't continue.
         try
         {
            if (status == FILE_NOT_CREATED ) 
@@ -737,18 +715,17 @@ namespace CCfits {
 
   int FITS::close () throw ()
   {
-  int   status=0;
-  if (m_FITSImpl == 0) return 0;
+    int status=0;
 
-  status = fits_close_file(m_FITSImpl->fptr(), &status);
-  if (!status)  m_FITSImpl->fptr() = 0;
-  return status;
+    status = fits_close_file(m_fptr, &status);
+    if (!status) m_fptr = 0;
+    return status;
   }
 
   const ExtHDU& FITS::extension (int i) const
   {
 
-  const ExtMap& ext = m_FITSImpl->extension();
+  const ExtMap& ext = m_extension;
   ExtMapConstIt hduByNum = ext.begin();
   ExtMapConstIt endOfList = ext.end();
   while (hduByNum != endOfList)
@@ -775,11 +752,11 @@ namespace CCfits {
   {
   s << "FITS:: Primary HDU: \n" ;
 
-  s << *m_FITSImpl->pHDU() << endl;
+  s << pHDU() << endl;
 
   s << "FITS:: Extensions: \n";
 
-  const ExtMap& ext = m_FITSImpl->extension();
+  const ExtMap& ext = m_extension;
   ExtMapConstIt endOfList = ext.end();
 
   for (ExtMapConstIt it = ext.begin();
@@ -790,15 +767,9 @@ namespace CCfits {
   return s;
   }
 
-  fitsfile* FITS::fitsPointer () const
-  {
-
-    return m_FITSImpl->fptr();
-  }
-
   ExtHDU& FITS::extension (int i)
   {
-  ExtMap& ext = m_FITSImpl->extension();
+  ExtMap& ext = m_extension;
   ExtMapIt hduByNum = ext.begin();
   ExtMapIt endOfList = ext.end();
 
@@ -824,28 +795,15 @@ namespace CCfits {
 
   const ExtHDU& FITS::extension (const String& hduName, int version) const
   {
-
   return extbyVersion(hduName,version);
-  }
-
-  const PHDU& FITS::pHDU () const
-  {
-
-    return *m_FITSImpl->pHDU();
-  }
-
-  PHDU& FITS::pHDU ()
-  {
-
-    return *m_FITSImpl->pHDU();
   }
 
   ExtHDU& FITS::extbyVersion (const String& hduName, int version) const
   {
   // hey! remember it's a multimap and we need to work a little harder!
   // first, for convenience...
-  // how many extensions with name hduName?
-  ExtMap& ext = m_FITSImpl->extension();        
+  // how many extensions with name hduName?  
+  const ExtMap& ext = m_extension;        
   ExtMap::size_type n = ext.count(hduName);
 
   if (n == 0) 
@@ -861,10 +819,10 @@ namespace CCfits {
   }
 
   // ignore version checking if there is only one version present.
-        ExtMapIt c = ext.lower_bound(hduName);
+        ExtMapConstIt c = ext.lower_bound(hduName);
         if ( n > 1)
         {
-             ExtMapIt last = ext.upper_bound(hduName);
+             ExtMapConstIt last = ext.upper_bound(hduName);
              while ( c != last )
              {
                     if ((*c).second->version() == version) break;
@@ -889,18 +847,13 @@ namespace CCfits {
         return *((*c).second);
   }
 
-  void FITS::pHDU (PHDU* value)
-  {
-    m_FITSImpl->pHDU() = value;
-  }
-
   void FITS::readExtensions (bool readDataFlag)
   {
-   HDUCreator create(m_FITSImpl);
+   HDUCreator create(this);
    int status = 0;
    int numHDUs = 0;
 
-   if (fits_get_num_hdus(m_FITSImpl->fptr(),&numHDUs,&status) != 0) throw FitsError(status);
+   if (fits_get_num_hdus(m_fptr,&numHDUs,&status) != 0) throw FitsError(status);
 
    // Not clearly exception safe : revisit!!!
 
@@ -914,11 +867,15 @@ namespace CCfits {
    }
   }
 
-  Table* FITS::addTable (const String& hduName, int rows, const std::vector<String>& columnName, const std::vector<String>& columnFmt, const std::vector<String>& columnUnit, HduType type, int version)
+  Table* FITS::addTable (const String& hduName, int rows, 
+          const std::vector<String>& columnName, 
+          const std::vector<String>& columnFmt, 
+          const std::vector<String>& columnUnit, 
+          HduType type, int version)
   {
    ExtHDU* current(0);
-   size_t N(extension().count(hduName));
-   std::pair<ExtMapIt,ExtMapIt> matches(extensionMap().equal_range(hduName));
+   size_t N(m_extension.count(hduName));
+   std::pair<ExtMapIt,ExtMapIt> matches(m_extension.equal_range(hduName));
    if ( N > 0 )
    {
       ExtMapIt s(matches.first);
@@ -936,78 +893,168 @@ namespace CCfits {
    }      
    if ( !current )
    {
-      HDUCreator newTable(m_FITSImpl);
+      HDUCreator newTable(this);
       Table* newHDU = static_cast<Table*>(newTable.createTable(hduName, type, rows,
                                                columnName, columnFmt,  columnUnit, version));   
       current = addExtension(newHDU);
    }
    return static_cast<Table*>(current);
   }
+  
+  Table * FITS::addGroupTable(const String & groupName, int groupID)
+  {
+    // +++ if I wanted to call addTable and specify HduType type = GroupTbl, I would need to provide column defs
+    //     plus, GroupTbl isn't a real HduType according to cfitsio, so I don't know if I want to add it to that enum
+    //     so I will mimic a lot of addTable.  I'm not sure if all this repeating is correct.
+    
+    string hduName("GROUPING");
+    ExtHDU* current(0);
+    size_t N(m_extension.count(hduName));
+    std::pair<ExtMapIt,ExtMapIt> matches(m_extension.equal_range(hduName));
+    if ( N > 0 )
+    {
+       ExtMapIt s(matches.first);
+       while  ( s != matches.second )
+       {
+          // +++ I think version means EXTVER
+          if (s->second->version() == groupID && dynamic_cast<Table*>(s->second) )
+          {
+             current = s->second;
+             std::cerr << " Table Extension " << hduName << " with version " 
+                     << groupID << " already exists "
+                     << " returning token for existing version \n";
+          }
+          ++s;     
+       }
+    }      
+    if ( !current )
+    {
+      HDUCreator newTable(this);
+      ExtHDU* newHDU = static_cast<Table*>(newTable.createTable(groupName, GroupTbl, 0, std::vector<String>(), std::vector<String>(),  std::vector<String>(), groupID));   
+      current = addExtension(newHDU);
+    }
+    
+    // now assign the grouping name
+    // +++ but HDU::addKeyword is private?
+    
+    return static_cast<Table*>(current);
+    //return static_cast<GroupTable*>(current);
+
+
+    
+    
+    
+    
+    
+//    
+//    // the C prototypes don't use const, so these casts are necessary.       
+//    char * gName = const_cast<char*>(groupName.c_str());  
+//    
+//    // +++ another option is to call addTable with the columns we want, and not use the built in cfitsio fn
+//    // +++ just add it to the end of the file for now
+//    if ( fits_create_group(m_fptr, gName, GT_ID_ALL_URI, &status) ) throw FitsError(status);
+//    
+//    // which extension index is the new ext
+//    int numHDUs = fits_get_num_hdus (m_fptr, > int *hdunum, &status);
+//    if (status) throw FitsError(status);
+//    
+//    HDUCreator newTable(this);
+//    // index of primary = 0
+//    HDU * newHDU = newTable.getHdu(numHDUs-1);
+//    
+//    // create the GroupTable
+//    GroupTable * groupTable;
+//    
+//    
+//    // now add the GroupTable to this FITS file
+//    // I know that this latest HDU is an extension, since I just added it,
+//    // so I can safely cast
+//    ExtHDU * newExtHDU = addExtension(static_cast<ExtHDU*>());
+//    //+++ if (newExtHDU == 0) throw ;
+//    
+    
+    
+  }
 
   ExtHDU* FITS::addImage (const String& hduName, int bpix, std::vector<long>& naxes, int version)
   {
-   ExtHDU* current(0);
-   size_t N(extension().count(hduName));
-   std::pair<ExtMapIt,ExtMapIt> matches(extensionMap().equal_range(hduName));
-   if ( N > 0 )
-   {
-      ExtMapIt s(matches.first);
-      while  (!current && s != matches.second )
-      {
-         if ( s->second->version() == version  )
-         {
-            std::cerr << " Extension " << hduName << " with version " 
-                    << version << " already exists "
-                    << " returning token for existing version \n";
-            current = s->second;
+    ExtHDU* current(0);
+    size_t N(m_extension.count(hduName));
+    std::pair<ExtMapIt,ExtMapIt> matches(m_extension.equal_range(hduName));
+    if ( N > 0 )
+    {
+       ExtMapIt s(matches.first);
+       while  (!current && s != matches.second )
+       {
+          if ( s->second->version() == version  )
+          {
+             std::cerr << " Extension " << hduName << " with version " 
+                     << version << " already exists "
+                     << " returning token for existing version \n";
+             current = s->second;
 
+          }
+          ++s;       
+       } 
+    }      
+    if (!current)
+    {
+         HDUCreator newImage(this);
+         ExtHDU* newHDU = newImage.createImage(hduName, bpix, naxes.size(), naxes,  version);  
+         current =  addExtension(newHDU);
+         if (getCompressionType())
+         {
+            if (static_cast<long>(naxes.size()) > currentCompressionTileDim())
+            {
+               currentCompressionTileDim(naxes.size());
+            }
          }
-         ++s;       
-      } 
-   }      
-   if (!current)
-   {
-        HDUCreator newImage(m_FITSImpl);
-        ExtHDU* newHDU = newImage.createImage(hduName, bpix, naxes.size(), naxes,  version);  
-        current =  addExtension(newHDU);
-        if (getCompressionType())
-        {
-           if (static_cast<long>(naxes.size()) > m_FITSImpl->currentCompressionTileDim())
-           {
-              m_FITSImpl->currentCompressionTileDim(naxes.size());
-           }
-        }
-   }
-   return current;
+    }
+    return current;
   }
 
   void FITS::destroy () throw ()
   {
-        // close the file associated with this FITS object if it is open.
-        // close () can't throw because it only calls cfitsio's close function,
-        // so error messages are handled here.
-        // destroyPrimary and destroyExtensions call delete which is guaranteed nothrow,
-        // destroyExtensions also calls multimap::erase
-        close();
+    // close the file associated with this FITS object if it is open.
+    // close () can't throw because it only calls cfitsio's close function,
+    // so error messages are handled here.
+    close();
 
-        // nullify and delete memory allocated for  primary HDU pointer
-        // delete memory allocated for Extensions and clear the map.
-        delete m_FITSImpl;
-        // nullify the fitsfile pointer, so that it passes "deallocated" tests
-        // such as: if ( x.fptr() == 0 )
-        m_FITSImpl = 0;
+    // destroyPrimary and destroyExtensions call delete which is guaranteed nothrow,
+    // destroyExtensions also calls multimap::clear
+    destroyPrimary();    
+    destroyExtensions();
+    
+    m_filename = "";
+
+    // nullify the fitsfile pointer, so that it passes "deallocated" tests
+    // such as: if ( x.m_fptr == 0 )
+    m_fptr = 0;
+  }
+  
+  
+  void FITS::destroyPrimary ()
+  {
+    delete m_pHDU;
+    m_pHDU = 0;
   }
 
+  void FITS::destroyExtensions ()
+  {
+    ExtMapIt endList = m_extension.end();
+
+    for (ExtMapIt hdu = m_extension.begin(); hdu != endList; hdu++)
+    {
+      delete (*hdu).second;
+    }
+
+    m_extension.clear();
+  }
+  
   void FITS::flush ()
   {
     int status (0);
-    if (fits_flush_file(m_FITSImpl->fptr(),&status)) throw FitsError(status);
-  }
-
-  const String& FITS::currentExtensionName () const
-  {
-
-    return m_FITSImpl->currentExtensionName();
+    if (fits_flush_file(m_fptr,&status)) throw FitsError(status);
   }
 
   ExtHDU* FITS::addExtension (ExtHDU* ext)
@@ -1015,42 +1062,20 @@ namespace CCfits {
    int status(0);
    const String& extName = ext->name();
    ExtMap::value_type addHDUEntry(extName,ext);
-   m_FITSImpl->currentExtensionName() = extName;
-   ExtMapIt added = m_FITSImpl->extension().insert(addHDUEntry);
-   if (fits_set_hdustruc(fitsPointer(),&status)) throw FitsError(status);
-   (*added).second->index(fitsPointer()->HDUposition);
+   currentExtensionName(extName);
+   ExtMapIt added = m_extension.insert(addHDUEntry);
+   if (fits_set_hdustruc(m_fptr,&status)) throw FitsError(status);
+   (*added).second->index(m_fptr->HDUposition);
    return (*added).second;
-  }
-
-  void FITS::swap (FITS& right)
-  {
-    FITSUtil::swap(m_FITSImpl,right.m_FITSImpl);
-  }
-
-  const ExtMap& FITS::extension () const
-  {
-
-    return m_FITSImpl->extension();
   }
 
   void FITS::resetPosition ()
   {
     int status(0);
-    if (fits_movabs_hdu(fitsPointer(),1,0,&status)) throw FitsError(status);
-    m_FITSImpl->currentExtensionName() = string("");
+    if (fits_movabs_hdu(m_fptr,1,0,&status)) throw FitsError(status);
+    currentExtensionName(string(""));
   }
-
-  void FITS::currentExtensionName (const String& extName)
-  {
-    m_FITSImpl->currentExtensionName() = extName;
-  }
-
-  const String& FITS::name () const
-  {
-
-    return m_FITSImpl->name();
-  }
-
+  
   void FITS::copy (const HDU& source)
   {
     int status(0);
@@ -1066,11 +1091,11 @@ namespace CCfits {
        return;
     }
 
-    HDU* hduCopy = source.clone(m_FITSImpl);
+    HDU* hduCopy = source.clone(this);
     std::unique_ptr<ExtHDU> extCopy(static_cast<ExtHDU*>(hduCopy));
     const String& hduName = extCopy->name(); 
-    size_t N = extension().count(hduName);
-    std::pair<ExtMapIt,ExtMapIt> matches(extensionMap().equal_range(hduName));
+    size_t N = m_extension.count(hduName);
+    std::pair<ExtMapIt,ExtMapIt> matches(m_extension.equal_range(hduName));
     if ( N > 0 )
     {
        ExtMapIt s(matches.first);
@@ -1092,7 +1117,7 @@ namespace CCfits {
     {    
        source.makeThisCurrent();
 
-       if (fits_copy_hdu(source.fitsPointer(),fitsPointer(),0,&status))
+       if (fits_copy_hdu(source.fitsPointer(),m_fptr,0,&status))
                    throw FitsError(status); 
 
        // the fits file has been updated, although the data have not 
@@ -1106,9 +1131,9 @@ namespace CCfits {
           // Assume this is copying an image
           if (getCompressionType())
           {
-             if (extCopy->axes() > m_FITSImpl->currentCompressionTileDim())
+             if (extCopy->axes() > currentCompressionTileDim())
              {
-                m_FITSImpl->currentCompressionTileDim(extCopy->axes());
+                currentCompressionTileDim(extCopy->axes());
              }
           }
        }
@@ -1149,7 +1174,7 @@ namespace CCfits {
                // are the same doesn't allow for the possibility that there are
                // two views of the same file.
                if (fits_file_name(inputFitsPointer,pName1.get(),&status)) throw FitsError(status);
-               if (fits_file_name(fitsPointer(),pName2.get(),&status)) throw FitsError(status);
+               if (fits_file_name(m_fptr,pName2.get(),&status)) throw FitsError(status);
                const String& infile = String(pName1.get());
                const String& outfile = String(pName2.get());
 
@@ -1199,13 +1224,13 @@ namespace CCfits {
                                 // create a new header from the source and set it to be the
                                 // current HDU
                                 cloneHeader(inputTable);
-                                if (fits_write_key_lng(fitsPointer(),EXTVER,revisedVersion,0,&status)) 
+                                if (fits_write_key_lng(m_fptr,EXTVER,revisedVersion,0,&status)) 
                                         throw FitsError(status);
                        }
 
-                       if (fits_select_rows(inputFitsPointer,fitsPointer(),cExpression,&status))
+                       if (fits_select_rows(inputFitsPointer,m_fptr,cExpression,&status))
                             throw FitsError(status);
-                       if (fits_flush_file(fitsPointer(),&status)) throw FitsError(status);
+                       if (fits_flush_file(m_fptr,&status)) throw FitsError(status);
 
                }
                else
@@ -1215,23 +1240,23 @@ namespace CCfits {
                        revisedVersion = nextVersionNumber(tableName);
                        cloneHeader(inputTable);
 
-                       if (fits_select_rows(inputFitsPointer,fitsPointer(),cExpression,&status))
+                       if (fits_select_rows(inputFitsPointer,m_fptr,cExpression,&status))
                             throw FitsError(status);       
 
-                       if (fits_write_key_lng(fitsPointer(),EXTVER,revisedVersion,0,&status)) 
+                       if (fits_write_key_lng(m_fptr,EXTVER,revisedVersion,0,&status)) 
                                throw FitsError(status);
-                       if (fits_flush_file(fitsPointer(),&status)) throw FitsError(status);
+                       if (fits_flush_file(m_fptr,&status)) throw FitsError(status);
 
                }
 
 
-               HDUCreator create(m_FITSImpl); 
+               HDUCreator create(this); 
                ExtHDU* readBack 
                 = static_cast<ExtHDU*>(create.getHdu(tableName,readData,keyStore,
                                 false,revisedVersion)); 
                return static_cast<Table&>(*addExtension(readBack)); 
        }
-       catch (std::bad_cast)
+       catch (std::bad_cast&)
        {
                throw OperationNotSupported(" filtering rows from an image ");       
        }
@@ -1241,25 +1266,18 @@ namespace CCfits {
 
   }
 
-  ExtMap& FITS::extensionMap ()
-  {
-
-    return m_FITSImpl->extension();
-  }
-
   ExtHDU& FITS::currentExtension ()
   {
     // return the current extension. Must have been previously instantiated by
     // CCfits.
     int num(0);
-    fits_get_hdu_num(fitsPointer(),&num);
+    fits_get_hdu_num(m_fptr,&num);
     // extensions start counting at 1, HDU indices at 2.
     return extension(num - 1);
   }
 
   String FITS::nameOfUnmapped (int hduNum) const
   {
-
     // return the name of HDUs not yet mapped.    
 
     static char EXTNAME[] = "EXTNAME";
@@ -1267,13 +1285,13 @@ namespace CCfits {
     String retVal("");
     int current(0);
     int status(0);
-    fits_get_hdu_num(fitsPointer(),&current);
-    if (fits_movabs_hdu(fitsPointer(),hduNum,0,&status)) throw FitsError(status);
+    fits_get_hdu_num(m_fptr,&current);
+    if (fits_movabs_hdu(m_fptr,hduNum,0,&status)) throw FitsError(status);
 
     FITSUtil::auto_array_ptr<char> pTestKey(new char[FLEN_VALUE]);
     char* testKey = pTestKey.get();
 
-    if (fits_read_key_str(fitsPointer(),EXTNAME,testKey,0,&status) == 0)
+    if (fits_read_key_str(m_fptr,EXTNAME,testKey,0,&status) == 0)
     {
             retVal = String(testKey);
     }
@@ -1282,7 +1300,7 @@ namespace CCfits {
         if (status == KEY_NO_EXIST)
         {
                 status = 0;
-                fits_read_key_str(fitsPointer(),HDUNAME,testKey,0,&status) ;
+                fits_read_key_str(m_fptr,HDUNAME,testKey,0,&status) ;
                 if (status == 0) 
                 {
                         retVal = String(testKey);
@@ -1297,7 +1315,7 @@ namespace CCfits {
                 throw FitsError(status);
         }
     }
-    if (fits_movabs_hdu(fitsPointer(),current,0,&status)) throw FitsError(status);
+    if (fits_movabs_hdu(m_fptr,current,0,&status)) throw FitsError(status);
 
     return retVal;
   }
@@ -1325,7 +1343,7 @@ namespace CCfits {
     // Must copy the keys of the source before creating the new HDU
     // because one cannot movabs to a raw HDU created by create_hdu:
     // the required keywords are not there and it returns an error.
-    if (sourcePointer == fitsPointer())
+    if (sourcePointer == m_fptr)
     {
         std::vector<String> cards(nKeys);
         {     
@@ -1336,25 +1354,24 @@ namespace CCfits {
                 }
         }      
     // fits_create_hdu makes a new HDU and makes it current.
-        if (fits_create_hdu(fitsPointer(),&status)) throw FitsError(status);
+        if (fits_create_hdu(m_fptr,&status)) throw FitsError(status);
         {
                 for (int j = 1; j <= nKeys; ++j)
                 {
-                        if (fits_write_record(fitsPointer(),const_cast<char*>(cards[j-1].c_str()),&status)) 
+                        if (fits_write_record(m_fptr,const_cast<char*>(cards[j-1].c_str()),&status)) 
                                                                         throw FitsError(status);       
                 }
         }  
     }
 
-
     else
     {
-        if (fits_create_hdu(fitsPointer(),&status)) throw FitsError(status);
+        if (fits_create_hdu(m_fptr,&status)) throw FitsError(status);
         for (int j = 1; j <= nKeys; ++j)
         {
                 if (fits_read_record(sourcePointer,j,card,&status)) 
                         throw FitsError(status);       
-                if (fits_write_record(fitsPointer(),card,&status)) 
+                if (fits_write_record(m_fptr,card,&status)) 
                         throw FitsError(status);       
         }
     }
@@ -1362,8 +1379,8 @@ namespace CCfits {
     // it's been raw copied from source.
 
     static char ROWS[] = "NAXIS2";
-    if (fits_update_key_lng(fitsPointer(),ROWS,0,0,&status)) throw FitsError(status);
-    if (fits_flush_file(fitsPointer(),&status)) throw FitsError(status);
+    if (fits_update_key_lng(m_fptr,ROWS,0,0,&status)) throw FitsError(status);
+    if (fits_flush_file(m_fptr,&status)) throw FitsError(status);
   }
 
   void FITS::deleteExtension (int doomed)
@@ -1372,8 +1389,8 @@ namespace CCfits {
     ExtHDU& d = extension(doomed); // throws NoSuchHDU if it's not there.
     const int removeIdx = d.index();
     std::vector<ExtHDU*> trailingExts;
-    ExtMapConstIt itExtMap = m_FITSImpl->extension().begin();
-    ExtMapConstIt itExtMapEnd = m_FITSImpl->extension().end();
+    ExtMapConstIt itExtMap = m_extension.begin();
+    ExtMapConstIt itExtMapEnd = m_extension.end();
     while (itExtMap != itExtMapEnd)
     {
        if (itExtMap->second->index() > removeIdx)
@@ -1381,7 +1398,7 @@ namespace CCfits {
        ++itExtMap;
     }
 
-    if (fits_delete_hdu(fitsPointer(),0,&status)) throw FitsError(status);
+    if (fits_delete_hdu(m_fptr,0,&status)) throw FitsError(status);
     unmapExtension(d);
     // Reindex the extensions that follow the deleted.
     for (size_t i=0; i<trailingExts.size(); ++i)
@@ -1391,7 +1408,7 @@ namespace CCfits {
   void FITS::setCompressionType (int compType)
   {
      int status = 0;
-     if (fits_set_compression_type(fitsPointer(), compType, &status))
+     if (fits_set_compression_type(m_fptr, compType, &status))
      {
         throw FitsError(status);
      }
@@ -1403,17 +1420,17 @@ namespace CCfits {
      int nDim = static_cast<int>(tileSizes.size());
      FITSUtil::CVarray<long> converter;
      FITSUtil::auto_array_ptr<long> pTileSizes(converter(tileSizes));
-     if (fits_set_tile_dim(fitsPointer(), nDim, pTileSizes.get(), &status))
+     if (fits_set_tile_dim(m_fptr, nDim, pTileSizes.get(), &status))
      {
         throw FitsError(status);
      }
-     m_FITSImpl->currentCompressionTileDim(nDim);
+     currentCompressionTileDim(nDim);
   }
 
   void FITS::setNoiseBits (int noiseBits)
   {
      int status = 0;
-     if (fits_set_noise_bits(fitsPointer(), noiseBits, &status))
+     if (fits_set_noise_bits(m_fptr, noiseBits, &status))
      {
         throw FitsError(status);
      }
@@ -1423,7 +1440,7 @@ namespace CCfits {
   {
      int compType = 0;
      int status = 0;
-     if (fits_get_compression_type(fitsPointer(), &compType, &status))
+     if (fits_get_compression_type(m_fptr, &compType, &status))
      {
         throw FitsError(status);
      }
@@ -1433,14 +1450,14 @@ namespace CCfits {
   void FITS::getTileDimensions (std::vector<long>& tileSizes) const
   {
      int status = 0;
-     int nDim = m_FITSImpl->currentCompressionTileDim();
+     int nDim = currentCompressionTileDim();
      tileSizes.resize(nDim);
 
      if (nDim)
      {
         FITSUtil::auto_array_ptr<long> pTileSizes(new long[nDim]);
         long* tilesArray = pTileSizes.get();
-        if (fits_get_tile_dim(fitsPointer(), nDim, tilesArray, &status))
+        if (fits_get_tile_dim(m_fptr, nDim, tilesArray, &status))
         {
            throw FitsError(status);
         }
@@ -1452,7 +1469,7 @@ namespace CCfits {
   {
      int noiseBits = 0;
      int status = 0;
-     if (fits_get_noise_bits(fitsPointer(), &noiseBits, &status))
+     if (fits_get_noise_bits(m_fptr, &noiseBits, &status))
      {
         throw FitsError(status);
      }
@@ -1464,7 +1481,7 @@ namespace CCfits {
   {
      // See header for description.
      ExtHDU* found=0;
-     const ExtMap& extMap = m_FITSImpl->extension();
+     const ExtMap& extMap = m_extension;
      if (hduIdx)
      {
         ExtMapConstIt itMap = extMap.begin();

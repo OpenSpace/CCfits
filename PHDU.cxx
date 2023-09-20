@@ -8,8 +8,6 @@
 
 // FITS
 #include "FITS.h"
-// FITSBase
-#include "FITSBase.h"
 // PHDU
 #include "PHDU.h"
 
@@ -25,7 +23,7 @@ namespace CCfits {
   {
   }
 
-  PHDU::PHDU (FITSBase* p, int bpix, int naxis, const std::vector<long>& axes)
+  PHDU::PHDU (FITS* p, int bpix, int naxis, const std::vector<long>& axes)
       : HDU(p,bpix,naxis, axes), m_simple(true), m_extend(true)
   {
    int  status (0);
@@ -56,7 +54,7 @@ namespace CCfits {
    index(0);
   }
 
-  PHDU::PHDU (FITSBase* p)
+  PHDU::PHDU (FITS* p)
   //! Reading Primary HDU constructor.
   /*! Constructor used  when reading the primary HDU from an existing file.
   *  Does nothing except initialize, with the real work done by the subclass

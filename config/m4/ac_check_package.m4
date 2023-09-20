@@ -15,7 +15,7 @@ dnl HAVE_PKG_PACKAGE is replaced with the actual first parameter passed)
 dnl note that autoheader will complain of not having the HAVE_PKG_PACKAGE and you
 dnl will have to add it to acconfig.h manually
 dnl
-dnl @version $Id: ac_check_package.m4,v 3.5 2003/05/11 18:54:32 pfkeb Exp $
+dnl @version $Id$
 dnl @author Paul_Kunz@slac.stanford.edu modified ac_caolan_check_package.m4 for all languages
 dnl
 AC_DEFUN([AC_CHECK_PACKAGE],

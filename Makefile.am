@@ -1,7 +1,5 @@
 ## Process this file with automake to produce Makefile.in
 #
-# $Id: Makefile.am,v 3.11 2016/01/14 23:02:38 gordon Exp $
-#
 # Author: Paul_Kunz@slac.stanford.edu
 #
 # The following set, else would follow GNU conventions.  Add
@@ -37,7 +35,7 @@ pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = CCfits.pc
 
 ## The following is needed for compiling cookbook.cxx
-INCLUDES = -I$(top_srcdir)/..
+AM_CPPFLAGS = -I$(top_srcdir)/..
 
 ## The library to be built
 lib_LTLIBRARIES = libCCfits.la
@@ -51,9 +49,9 @@ libCCfits_la_SOURCES =				\
         ColumnVectorData.cxx                    \
         ExtHDU.cxx				\
 	FITS.cxx				\
-	FITSBase.cxx				\
 	FITSUtil.cxx				\
 	FitsError.cxx				\
+	GroupTable.cxx				\
 	HDU.cxx					\
 	HDUCreator.cxx				\
 	KeyData.cxx				\
@@ -82,10 +80,10 @@ libCCfits_la_HEADERS =				\
         ExtHDU.h				\
         ExtHDUT.h                               \
 	FITS.h					\
-	FITSBase.h				\
 	FITSUtil.h				\
 	FITSUtilT.h				\
 	FitsError.h				\
+	GroupTable.h				\
 	HDU.h					\
 	HDUCreator.h				\
 	Image.h					\
@@ -100,9 +98,9 @@ libCCfits_la_HEADERS =				\
 	PrimaryHDU.h				\
 	Table.h
 
-run_cookbook:
-	rm -rf *.fit
-	cookbook.C
+#run_cookbook:
+#	rm -rf *.fit
+#	cookbook.C
 
 ## The following is for Mac OS X.  
 ## It has not yet been tested.
@@ -118,4 +116,4 @@ docs:
 	doxygen Doxyfile
 
 clean-local:
-	-rm -rf SunWS_cache
+	-rm -rf SunWS_cache *.fit
