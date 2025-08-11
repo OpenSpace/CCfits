@@ -212,7 +212,7 @@ namespace CCfits {
         }
         else
         {
-           m_fullImageCache.resize(0);
+           m_fullImageCache = std::valarray<T>();
            m_currentRead.resize(elementsToRead);
            if (fits_read_img(fPtr,imageType(),first,elementsToRead,
                nullValue,&m_currentRead[0],&any,&status) != 0) throw FitsError(status);
