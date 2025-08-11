@@ -153,7 +153,7 @@ namespace CCfits {
   {
      if (!naxes.size())
      {
-        m_currentRead.resize(0);
+        m_currentRead = std::valarray<T>();
         return m_currentRead;
      }
      unsigned long init(1);
